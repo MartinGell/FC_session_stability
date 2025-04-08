@@ -26,36 +26,36 @@ fd_threshold = 0.2
 remove_outliers = True
 
 # Smoothing options
-smooth = True
+smooth = False
 smoothing_kernel = 2
 
 
 ## File identification options ##
 # HELPER: sub-XXXXXX_ses-X_task-{task}_space-fsLR_{metric}.{ext_in}
-task = 'restMENORDICtrimmed'
-metric = 'den-91k_desc-denoised_bold'
-ext_in = 'dtseries.nii'
-ext_out = 'dconn.nii'
-
 # task = 'restMENORDICtrimmed'
-# metric = 'seg-4S1056Parcels_den-91k_stat-mean_timeseries'
-# ext_in = 'ptseries.nii'
-# ext_out = 'pconn.nii'
+# metric = 'den-91k_desc-denoised_bold'
+# ext_in = 'dtseries.nii'
+# ext_out = 'dconn.nii'
+
+task = 'restMENORDICtrimmed'
+metric = 'seg-HCP_den-91k_stat-mean_timeseries'
+ext_in = 'ptseries.nii'
+ext_out = 'pconn.nii'
 
 
 ### Subjects, sessions and runs ###
 #sub = ['SUB-10054-01']
-# sub = ['SUB-10036-01', 'SUB-10041-01', 'SUB-10054-01', 'SUB-10070-01', 'SUB-10075-01', 'SUB-10078-01', 'SUB-10091-01', 'SUB-10111-01']
+sub = ['SUB-10036-01', 'SUB-10041-01', 'SUB-10054-01', 'SUB-10070-01', 'SUB-10075-01', 'SUB-10078-01', 'SUB-10091-01', 'SUB-10111-01']
+ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
+new_ses = 'ses-3'
+run = ['run-07','run-08','run-09']  # MUST BE 02, 03,...
+
+# sub = ['SUB-10030-01']  
 # ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
 # new_ses = 'ses-4'
-# run = ['run-10','run-11','run-12']  # MUST BE 02, 03,...
+# run = ['run-06','run-07','run-08']  # MUST BE 02, 03,...
 
-sub = ['SUB-10030-01']  
-ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
-new_ses = 'ses-4'
-run = ['run-06','run-07','run-08']  # MUST BE 02, 03,...
-
-# sub = ['SUB-10044-01'] ###### missing run-02
+# sub = ['SUB-10029-01', 'SUB-10044-01'] ###### missing run-02
 # ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
 # new_ses = 'ses-2'
 # run = ['run-01','run-02','run-03']  # MUST BE 02, 03,...
@@ -83,7 +83,7 @@ for s_i in sub:
     sub_i = s_i.split('-')
     sub_i = sub_i[1]+sub_i[2]
 
-    print(f'Sub: {sub_i}')
+    print(f'\n\nSub: {sub_i}')
 
     outdir = out / dataset / f'sub-{sub_i}'
     # Create the directory if it doesn't exist
@@ -96,7 +96,7 @@ for s_i in sub:
         # Create the directory if it doesn't exist
         outfile.mkdir(parents=True, exist_ok=True)
 
-        print('Getting data...')
+        print('\nGetting data...')
         for run_i in run:
             print(f'File: {run_i}')
 
@@ -122,7 +122,7 @@ for s_i in sub:
 
 
         # concat all of ses-x time series
-        print('Concatenating d/pseries...')
+        print('\nConcatenating d/pseries...')
         runs = glob.glob(f'{outfile}/func/*{metric}.{ext_in}')
         cifti_out = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}.{ext_in}'
         merge_args = ['./cifti_merge.sh', str(cifti_out)]
@@ -141,19 +141,21 @@ for s_i in sub:
                 # Extract the binary mask indicating frame removal based on framewise displacement (FD) threshold.
                 # Frames with FD > threshold are marked as 1 (removed), and frames with FD <= fd_threshold are marked as 0 (kept).
                 m_i = f['dcan_motion'][f'fd_{fd_threshold}']['binary_mask'][()].astype(int)
+                TR = f['dcan_motion']['fd_0.2']['remaining_seconds'][()]/f['dcan_motion']['fd_0.2']['remaining_total_frame_count'][()]
+                print(f"TR: {TR}")
             motion_list.append(m_i)
 
         motion = np.concatenate(motion_list)
         inverted_motion = 1-motion     # NEED TO INVERT FOR wb_command as it expects 0 = remove, 1 = keep
         motion_file = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_desc-FD_{fd_str}.txt'
-        print('Saving concatenated motion file...')
+        print('\nSaving concatenated motion file...')
         print(f'Will remove {np.sum(motion).astype(int)} frames at FD > {fd_threshold}')
         np.savetxt(motion_file, inverted_motion, fmt="%d")
 
         # optionally identify outliers. Removal happens when creating the d/pconn
         if remove_outliers:
             # First run wb_command and load the std.txt file as its faster
-            print('Identifying outliers using the median approach...')
+            print('\nIdentifying outliers using the median approach...')
             std_txt = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_std.txt'
             stats_args = ['./cifti_std.sh', str(cifti_out), str(std_txt)]
             output = subprocess.run(stats_args, capture_output=True, text=True)
@@ -174,20 +176,23 @@ for s_i in sub:
                 std_txt = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_std_np.txt'
                 np.savetxt(std_txt, std, fmt='%.5f')
 
-            print('Flagging outliers...')
+            print('\nFlagging outliers...')
             [outlier,_,_,_] = isthisanoutlier(std)
             # turn outlier into a binary mask (0 = remove, 1 = keep)
             outlier = outlier.astype(int)
             inverted_outlier = 1-outlier
             outlier_file = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_std_outlier.txt'
             np.savetxt(outlier_file, inverted_outlier, fmt='%d')
+            print(f'Flagged {np.sum(outlier).astype(int)} additional frames as outliers.')
 
             # combine motion and outlier files
-            print('Combining motion and outlier files and saving...')
+            print('\nCombining motion and outlier files and saving...')
             combined = np.logical_and(inverted_motion, inverted_outlier).astype(int)
             combined_file = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_desc-FD_{fd_str}_and_outliers_combined.txt'
             np.savetxt(combined_file, combined, fmt="%d")
             motion_file = combined_file
+            minutes = sum(combined)*TR/60
+            print(f'Participant left with {minutes} minutes of data in this session.')
 
         # Smooth if necessary
         if smooth:
@@ -219,7 +224,7 @@ for s_i in sub:
                 print(f"{output.stdout.strip()}")
 
             # Now actually smooth            
-            print('Smoothing...')
+            print('\nSmoothing...')
             smooth_out = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_smoothed_{smoothing_kernel}.{ext_in}'
             smooth_args = ['./cifti_smooth.sh', str(cifti_out), str(smooth_out), str(smoothing_kernel), str(surf_L), str(surf_R)]
             output = subprocess.run(smooth_args, capture_output=True, text=True, check=True)
@@ -230,7 +235,7 @@ for s_i in sub:
             cifti_out = smooth_out
 
         # create p/dconn
-        print('Creating p/dconn...')
+        print('\nCreating p/dconn...')
         pconn = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_FD_{fd_str}{smooth_str}.{ext_out}'
         correlation_args = ['./cifti_correlation.sh', str(cifti_out), str(pconn), str(motion_file)]
         output = subprocess.run(correlation_args, capture_output=True, text=True, check=True)
@@ -241,13 +246,13 @@ for s_i in sub:
 
         
         # remove individual runs and keep only concatenated session:
-        print('Removing individual run data...')
+        print('\nRemoving individual run data...')
         for run_j in runs:
             if os.path.exists(run_j):
                 os.remove(run_j)
             print(f"{run_j} --> deleted.")
             
-        print('Removing individual motion data...')
+        print('\nRemoving individual motion data...')
         for motion_j in motion_files:
             if os.path.exists(motion_j):
                 os.remove(motion_j)
