@@ -13,7 +13,7 @@ motion=${3}
 #wb_command -cifti-correlation ${cifti_out} ${pconn} -weights ${motion} -fisher-z
 
 # Build the arguments
-args="-cifti-correlation ${cifti_out} ${pconn} -weights ${motion} -fisher-z"
+args="-cifti-correlation ${cifti_out} ${pconn} -weights ${motion}"
 
 # Run and print
 wb_command ${args}
