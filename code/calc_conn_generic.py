@@ -61,7 +61,7 @@ wd = Path(os.path.dirname(wd))
 out = wd / 'input'
 
 for sub_i in sub:
-    print(f'Sub: {sub_i}')
+    print(f'\n\nSub: {sub_i}')
 
     outdir = out / dataset / f'sub-{sub_i}'
     # Create the directory if it doesn't exist
@@ -74,10 +74,10 @@ for sub_i in sub:
         # Create the directory if it doesn't exist
         outfile.mkdir(parents=True, exist_ok=True)
 
-        print('Getting data...')
+        print('\nGetting data...')
         #s3_loc =  f'{datasetdir}/{sub_i}/sub-{sub_i}/{ses_i}'
         s3_loc =  f'{datasetdir}/sub-{sub_i}/xcp_d/sub-{sub_i}/{ses_i}'
-        run_i = f'{task}_{run}' if run else ''
+        run_i = f'{run}_' if run else ''
 
         # BOLD
         s3_file = f'{s3_loc}/func/sub-{sub_i}_{ses_i}_task-{task}_{run_i}space-fsLR_{metric}.{ext_in}'
@@ -104,18 +104,20 @@ for sub_i in sub:
             # Extract the binary mask indicating frame removal based on framewise displacement (FD) threshold.
             # Frames with FD > threshold are marked as 1 (removed), and frames with FD <= fd_threshold are marked as 0 (kept).
             motion = f['dcan_motion'][f'fd_{fd_threshold}']['binary_mask'][()].astype(int)
-
+            TR = f['dcan_motion']['fd_0.2']['remaining_seconds'][()]/f['dcan_motion']['fd_0.2']['remaining_total_frame_count'][()]
+            print(f"TR: {TR}")
+        
         #motion = np.concatenate(motion_list)
         inverted_motion = 1-motion     # NEED TO INVERT FOR wb_command as it expects 0 = remove, 1 = keep
         motion_file = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_desc-FD_{fd_str}.txt'
-        print('Saving concatenated motion file...')
+        print('\nSaving concatenated motion file...')
         print(f'Will remove {np.sum(motion).astype(int)} frames at FD > {fd_threshold}')
         np.savetxt(motion_file, inverted_motion, fmt="%d")
 
         # optionally identify outliers. Removal happens when creating the d/pconn
         if remove_outliers:
             # First run wb_command and load the std.txt file as its faster
-            print('Identifying outliers using the median approach...')
+            print('\nIdentifying outliers using the median approach...')
             std_txt = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_std.txt'
             stats_args = ['./cifti_std.sh', str(cifti_in), str(std_txt)]
             output = subprocess.run(stats_args, capture_output=True, text=True)
@@ -136,20 +138,23 @@ for sub_i in sub:
                 std_txt = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_std_np.txt'
                 np.savetxt(std_txt, std, fmt='%.5f')
 
-            print('Flagging outliers...')
+            print('\nFlagging outliers...')
             [outlier,_,_,_] = isthisanoutlier(std)
             # turn outlier into a binary mask (0 = remove, 1 = keep)
             outlier = outlier.astype(int)
             inverted_outlier = 1-outlier
             outlier_file = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_std_outlier.txt'
             np.savetxt(outlier_file, inverted_outlier, fmt='%d')
+            print(f'Flagged {np.sum(outlier).astype(int)} additional frames as outliers.')
 
             # combine motion and outlier files
-            print('Combining motion and outlier files and saving...')
+            print('\nCombining motion and outlier files and saving...')
             combined = np.logical_and(inverted_motion, inverted_outlier).astype(int)
             combined_file = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_desc-FD_{fd_str}_and_outliers_combined.txt'
             np.savetxt(combined_file, combined, fmt="%d")
             motion_file = combined_file
+            minutes = sum(combined)*TR/60
+            print(f'Participant left with {minutes} minutes of data in this session.')
 
         # Smooth if necessary
         if smooth:
@@ -171,7 +176,7 @@ for sub_i in sub:
             print(f"{output.stdout.strip()}")
 
             # Now actually smooth            
-            print('Smoothing...')
+            print('\nSmoothing...')
             smooth_out = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_smoothed_{smoothing_kernel}.{ext_in}'
             smooth_args = ['./cifti_smooth.sh', str(cifti_in), str(smooth_out), str(smoothing_kernel), str(surf_L), str(surf_R)]
             output = subprocess.run(smooth_args, capture_output=True, text=True, check=True)
@@ -182,7 +187,7 @@ for sub_i in sub:
             cifti_in = smooth_out
 
         # create p/dconn
-        print('Creating p/dconn...')
+        print('\nCreating p/dconn...')
         pconn = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_FD_{fd_str}{smooth_str}.{ext_out}'
         correlation_args = ['./cifti_correlation.sh', str(cifti_in), str(pconn), str(motion_file)]
         output = subprocess.run(correlation_args, capture_output=True, text=True, check=True)
