@@ -27,7 +27,7 @@ if not sys.warnoptions:
 
 
 feature = 'Glasser' # '4S1056Parcels'
-dataset = 'MSC' # 'subpop'
+dataset = 'HCPtrt_cneuro' # 'subpop', 'MSC', HCPtrt_cneuro
 ####################################### 
 
 
@@ -168,7 +168,6 @@ print(results.describe())
 
 # save - possibly switch to datatable
 file2save = f'{outdir}/{dataset}_icc_variances_{feature}.csv'
-#file2save = f'{outdir}/{dataset}_icc_variances_TEST.csv'
 print(f'saving: {file2save}')
 results.to_csv(file2save, index=False)
 
@@ -177,6 +176,7 @@ results.to_csv(file2save, index=False)
 axes = results.hist(bins=50, figsize=(10, 8))
 plt.savefig(f'{outdir}/{dataset}_results_histograms_{feature}.png')
 plt.close()
+print(f'saving: {f'{outdir}/{dataset}_results_histograms_{feature}.png'}')
 
 
 
@@ -192,8 +192,8 @@ plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=-1, vmax=1)
 cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
-#file2save = parts[10].split('task-')[1].split('_den')  # just want this: 'restMENORDICtrimmed_space-fsLR_seg-4S956Parcels'    ##### possibly just 4S956Parcels????
-file2save = f"{outdir}/plots/EXAMPLE_SUBJECT_{feature}.png"
+file2save = outdir / 'plots' / f"EXAMPLE_SUBJECT_{dataset}_{feature}.png"
+file2save.parent.mkdir(parents=True, exist_ok=True)
 print(f'saving: {file2save}')
 plt.savefig(f'{file2save}', dpi=180)
 plt.close()
@@ -201,7 +201,7 @@ plt.close()
 
 
 icc_mat = connectome.vec_to_sym_matrix(results['between_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
-np.fill_diagonal(icc_mat, 1)
+np.fill_diagonal(icc_mat, 0)
 
 cmap_custom = plt.cm.YlGnBu
 
@@ -210,8 +210,7 @@ plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
 cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
-#file2save = parts[10].split('task-')[1].split('_den')  # just want this: 'restMENORDICtrimmed_space-fsLR_seg-4S956Parcels'    ##### possibly just 4S956Parcels????
-file2save = f"{outdir}/plots/BW_{feature}.png"
+file2save = outdir / 'plots' / f"BW_{dataset}_{feature}.png"
 print(f'saving: {file2save}')
 plt.savefig(f'{file2save}', dpi=180)
 plt.close()
@@ -219,17 +218,17 @@ plt.close()
 
 
 icc_mat = connectome.vec_to_sym_matrix(results['within_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
-np.fill_diagonal(icc_mat, 1)
+np.fill_diagonal(icc_mat, 0)
 
 cmap_custom = plt.cm.YlGnBu
 
 plt.figure(figsize=(7, 7))
-plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.01)
+#plt.imshow(icc_mat, origin='lower', cmap=cmap_custom)
+plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.016)
 cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
-#file2save = parts[10].split('task-')[1].split('_den')  # just want this: 'restMENORDICtrimmed_space-fsLR_seg-4S956Parcels'    ##### possibly just 4S956Parcels????
-file2save = f"{outdir}/plots/WH_{feature}.png"
+file2save = outdir / 'plots' / f"WH_{dataset}_{feature}.png"
 print(f'saving: {file2save}')
 plt.savefig(f'{file2save}', dpi=180)
 plt.close()
@@ -246,8 +245,7 @@ plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=1)
 cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
-#file2save = parts[10].split('task-')[1].split('_den')  # just want this: 'restMENORDICtrimmed_space-fsLR_seg-4S956Parcels'    ##### possibly just 4S956Parcels????
-file2save = f"{outdir}/plots/icc_{feature}.png"
+file2save = outdir / 'plots' / f"icc_{dataset}_{feature}.png"
 print(f'saving: {file2save}')
 plt.savefig(f'{file2save}', dpi=180)
 plt.close()
