@@ -25,7 +25,7 @@ if not sys.warnoptions:
 ### User-specified parameters ###
 # Input/output directories and file paths
 feature = 'denoised_bold'
-indir = '/home/btervocl/shared/projects/martin_SNR/input/subpop'
+indir = '/home/btervocl/shared/projects/martin_SNR/data/subpop'
 outdir = '/home/btervocl/shared/projects/martin_SNR/res/subpop'
 file_paths = glob.glob(f"{indir}/sub-*/ses-*/*{feature}*.h5")
 

@@ -70,7 +70,7 @@ smooth_str = f'_smoothed_{smoothing_kernel}mm' if smooth else ''
 # Prep
 wd = os.getcwd()
 wd = Path(os.path.dirname(wd))
-out = wd / 'input'
+out = wd / 'data'
 
 for sub_i in sub:
     print(f'\n\n\nSub: {sub_i}')

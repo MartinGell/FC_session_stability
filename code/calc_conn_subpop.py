@@ -47,8 +47,8 @@ ext_out = 'pconn.nii'
 #sub = ['SUB-10054-01']
 sub = ['SUB-10036-01', 'SUB-10041-01', 'SUB-10054-01', 'SUB-10070-01', 'SUB-10075-01', 'SUB-10078-01', 'SUB-10091-01', 'SUB-10111-01']
 ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
-new_ses = 'ses-4'
-run = ['run-10','run-11','run-12']  # MUST BE 02, 03,...
+new_ses = 'ses-1'
+run = ['run-01','run-02','run-03']  # MUST BE 02, 03,...
 
 # sub = ['SUB-10030-01']  
 # ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
@@ -76,7 +76,7 @@ smooth_str = f'_smoothed_{smoothing_kernel}mm' if smooth else ''
 # Prep folder locations
 wd = os.getcwd()
 wd = Path(os.path.dirname(wd))
-out = wd / 'input'
+out = wd / 'data'
 
 # Get data and create d/pconn
 for s_i in sub:

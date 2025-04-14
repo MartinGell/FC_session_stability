@@ -10,8 +10,8 @@ from nilearn import connectome
 feature = '4S1056Parcels' #
 
 
-indir = '/home/btervocl/shared/projects/martin_SNR/input/subpop'
-#indir = '/Users/mgell/Work/SNR/input/subpop'
+indir = '/home/btervocl/shared/projects/martin_SNR/data/subpop'
+#indir = '/Users/mgell/Work/SNR/data/subpop'
 outdir = '/home/btervocl/shared/projects/martin_SNR/res/subpop'
 
 nii = nb.load(f'{indir}/sub-1007501/ses-2/sub-1007501_ses-2_task-restMENORDICtrimmed_space-fsLR_seg-{feature}_den-91k_stat-mean_timeseries.ptseries.nii')

@@ -93,11 +93,13 @@ for s_i in sub:
         outfile.mkdir(parents=True, exist_ok=True)
 
         print('\nGetting data...')
+        #s3_loc =  f'{datasetdir}/{sub_i}/sub-{sub_i}/{ses_i}'
         s3_loc =  f'{datasetdir}/sub-{sub_i}_{ses_i}/sub-{sub_i}/{ses_i}'
         run_i = f'{run}_' if run else ''
 
         # BOLD
         s3_file = f'{s3_loc}/func/sub-{sub_i}_{ses_i}_task-{task}_{run_i}space-fsLR_{metric}.{ext_in}'
+        #file_in = outfile / 'func' / f'sub-{sub_i}_{ses_i}_task-{task}_{run_i}_space-fsLR_{metric}.{ext_in}'
         cifti_in = outfile / 'func' / f'sub-{sub_i}_{ses_i}_task-{task}_{run_i}_space-fsLR_{metric}.{ext_in}'
 
         output = subprocess.run(['./get_data.sh',str(s3_file),str(cifti_in)], capture_output=True, text=True, check=True)
@@ -107,6 +109,7 @@ for s_i in sub:
 
         # Motion
         s3_file = f'{s3_loc}/func/sub-{sub_i}_{ses_i}_task-{task}_{run_i}desc-{qc}.hdf5'
+        #file_in = outfile / 'func' / f'sub-{sub_i}_{ses_i}_task-{task}_{run_i}_desc-abcc_qc.hdf5'
         motion_file = outfile / 'func' / f'sub-{sub_i}_{ses_i}_task-{task}_{run_i}_desc-{qc}.hdf5'
 
         output = subprocess.run(['./get_data.sh',str(s3_file),str(motion_file)], capture_output=True, text=True, check=True)
