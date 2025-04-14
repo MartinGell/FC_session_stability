@@ -5,6 +5,10 @@ import glob
 import warnings
 import time
 import traceback
+import os
+import sys
+from pathlib import Path
+
 
 import matplotlib.pyplot as plt
 
@@ -17,17 +21,29 @@ from statsmodels.regression.mixed_linear_model import MixedLM
 
 #warnings.filterwarnings("ignore", category=DeprecationWarning)
 #warnings.filterwarnings("ignore", category=FutureWarning)
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+    os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
 
 
-feature = '4S1056Parcels' #
+feature = 'Glasser' # '4S1056Parcels'
+dataset = 'MSC' # 'subpop'
+####################################### 
 
-indir = '/home/btervocl/shared/projects/martin_SNR/input/subpop'
-#indir = '/Users/mgell/Work/SNR/input/subpop'
-outdir = '/home/btervocl/shared/projects/martin_SNR/res/subpop'
 
+
+# Prep folder locations
+wd = os.getcwd()
+wd = Path(os.path.dirname(wd))
+indir = wd / 'data' / dataset
+outdir = wd / 'res' / dataset
+outdir.mkdir(parents=True, exist_ok=True)
+
+# Get all subjects data locations
 subs = glob.glob(f'{indir}/*')
 file_paths = glob.glob(f"{indir}/sub-*/ses-*/*{feature}*.pconn.nii")
 
+# initialise
 data = []
 
 for file_i in sorted(file_paths):
@@ -45,9 +61,9 @@ for file_i in sorted(file_paths):
 
     dat = dat.astype(np.float16)
 
-    new_img = nb.Cifti2Image(dat, header=nii.header,
-                         nifti_header=nii.nifti_header)
-    new_img.to_filename(f'{indir}/sub-{sub_id}/{ses_id}/sub-{sub_id}_{ses_id}_task-restMENORDICtrimmed_space-fsLR_den-91k_desc-denoised_bold_FD_02_smoothed_2mm_rounded.dconn.nii')
+    # new_img = nb.Cifti2Image(dat, header=nii.header,
+    #                      nifti_header=nii.nifti_header)
+    # new_img.to_filename(f'{indir}/sub-{sub_id}/{ses_id}/sub-{sub_id}_{ses_id}_task-restMENORDICtrimmed_space-fsLR_den-91k_desc-denoised_bold_FD_02_smoothed_2mm_rounded.dconn.nii')
 
 
     print(dat.shape)
@@ -144,20 +160,22 @@ if not results_df['column'].equals(pd.Series(original_order)):
 # Save results and errors separately
 results = results_df[['column', 'between_sub_var', 'within_sub_var', 'icc']]
 error_log = results_df[results_df['error'].notnull()]
-error_log[['column', 'error']].to_csv(f'{outdir}/subpop_icc_variances_{feature}_error_log.csv', index=False)
+error_dir = outdir / f'{dataset}_icc_variances_{feature}_error_log.csv'
+error_dir.parent.mkdir(parents=True, exist_ok=True)
+error_log[['column', 'error']].to_csv(error_dir, index=False)
 
 print(results.describe())
 
 # save - possibly switch to datatable
-file2save = f'{outdir}/subpop_icc_variances_{feature}.csv'
-#file2save = f'{outdir}/subpop_icc_variances_TEST.csv'
+file2save = f'{outdir}/{dataset}_icc_variances_{feature}.csv'
+#file2save = f'{outdir}/{dataset}_icc_variances_TEST.csv'
 print(f'saving: {file2save}')
 results.to_csv(file2save, index=False)
 
 
 # Save histograms for quick viewing
 axes = results.hist(bins=50, figsize=(10, 8))
-plt.savefig(f'{outdir}/subpop_results_histograms_{feature}.png')
+plt.savefig(f'{outdir}/{dataset}_results_histograms_{feature}.png')
 plt.close()
 
 
