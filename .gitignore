@@ -6,7 +6,7 @@
 # my files
 /data/*
 /res/*
-
+/code/sublist/*
 
 
 ### JupyterNotebooks ###
