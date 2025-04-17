@@ -7,9 +7,10 @@ from pathlib import Path
 import h5py
 import nibabel as nb
 import numpy as np
+import pandas as pd
 
 from functions.handling_outliers import isthisanoutlier
-from functions.utils import filter_output
+from functions.utils import filter_output, build_subject_session_run_map
 
 
 ######## OPTIONS ########
@@ -17,7 +18,7 @@ from functions.utils import filter_output
 datasetdir = 's3://subpop/derivatives/xcpd/output'
 
 # name the directory to save data to
-dataset = 'subpop' #'subpop'
+dataset = 'subpop2' #'subpop'
 
 # Motion filter options
 fd_threshold = 0.2
@@ -44,26 +45,9 @@ ext_out = 'pconn.nii'
 
 
 ### Subjects, sessions and runs ###
-#sub = ['SUB-10054-01']
-sub = ['SUB-10036-01', 'SUB-10041-01', 'SUB-10054-01', 'SUB-10070-01', 'SUB-10075-01', 'SUB-10078-01', 'SUB-10091-01', 'SUB-10111-01']
-ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
-new_ses = 'ses-1'
-run = ['run-01','run-02','run-03']  # MUST BE 02, 03,...
-
-# sub = ['SUB-10030-01']  
-# ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
-# new_ses = 'ses-4'
-# run = ['run-06','run-07','run-08']  # MUST BE 02, 03,...
-
-# sub = ['SUB-10029-01', 'SUB-10044-01'] ###### missing run-02
-# ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
-# new_ses = 'ses-2'
-# run = ['run-04','run-05','run-06']  # MUST BE 02, 03,...
-
-# sub = ['SUB-10002-01','SUB-10035-01']  ##### SUB-10002-01 dissapeared???
-# ses = ['ses-combined']  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
-# new_ses = 'ses-1'
-# run = ['run-01','run-02']  # MUST BE 02, 03,...
+sublist = '/home/btervocl/shared/projects/martin_FC_stability/code/sublist/Subject_Sessions_with_Runs.csv'
+sub_ses_run_map = build_subject_session_run_map(sublist)
+ses_combined = 'ses-combined'  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
 ######## END OF OPTIONS ########
 
 
@@ -79,25 +63,26 @@ wd = Path(os.path.dirname(wd))
 out = wd / 'data'
 
 # Get data and create d/pconn
-for s_i in sub:
+for s_i, ses_dict in sub_ses_run_map.items():
     sub_i = s_i.split('-')
     sub_i = sub_i[1]+sub_i[2]
 
-    print(f'\n\nSub: {sub_i}')
+    print(f'\n\n\nSub: {sub_i}')
 
     outdir = out / dataset / f'sub-{sub_i}'
     # Create the directory if it doesn't exist
     outdir.mkdir(parents=True, exist_ok=True)
     
-    for ses_i in ses:
-        print(f'Session: {ses_i}, creating {new_ses}')
+    for new_ses, runs in ses_dict.items():
+        ses_i = ses_combined
+        print(f'\n\nSession: {ses_i}, creating {new_ses}')
 
         outfile = outdir / new_ses
         # Create the directory if it doesn't exist
         outfile.mkdir(parents=True, exist_ok=True)
 
         print('\nGetting data...')
-        for run_i in run:
+        for run_i in runs:
             print(f'File: {run_i}')
 
             s3_loc =  f'{datasetdir}/{sub_i}/sub-{sub_i}/{ses_i}'
