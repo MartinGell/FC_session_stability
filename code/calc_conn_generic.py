@@ -10,6 +10,7 @@ import numpy as np
 
 from functions.handling_outliers import isthisanoutlier
 from functions.utils import filter_output
+from functions.dconn_shrinker import dconn_to_hdf5
 
 
 ######## OPTIONS ########
@@ -188,10 +189,20 @@ for sub_i in sub:
 
         # create p/dconn
         print('\nCreating p/dconn...')
-        pconn = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_FD_{fd_str}{smooth_str}.{ext_out}'
-        correlation_args = ['./cifti_correlation.sh', str(cifti_in), str(pconn), str(motion_file)]
+        conn = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_FD_{fd_str}{smooth_str}.{ext_out}'
+        correlation_args = ['./cifti_correlation.sh', str(cifti_in), str(conn), str(motion_file)]
         output = subprocess.run(correlation_args, capture_output=True, text=True, check=True)
         #print(f'{correlation_args}')
         if output.stderr.strip():
             raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
         print(f"{filter_output(output.stdout.strip())}")
+
+        if ext_out == 'dconn.nii':
+            # Convert dconn to hdf5
+            print('Converting dconn to hdf5...')
+            dconn_to_hdf5(conn)
+            # and now remove the dconn file
+            print('Removing dconn file...')
+            print(f"{conn} --> deleted.")
+            os.remove(conn)
+

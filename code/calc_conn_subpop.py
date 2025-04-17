@@ -11,6 +11,7 @@ import pandas as pd
 
 from functions.handling_outliers import isthisanoutlier
 from functions.utils import filter_output, build_subject_session_run_map
+from functions.dconn_shrinker import dconn_to_hdf5
 
 
 ######## OPTIONS ########
@@ -18,7 +19,7 @@ from functions.utils import filter_output, build_subject_session_run_map
 datasetdir = 's3://subpop/derivatives/xcpd/output'
 
 # name the directory to save data to
-dataset = 'subpop2' #'subpop'
+dataset = 'subpop' #'subpop'
 
 # Motion filter options
 fd_threshold = 0.2
@@ -221,14 +222,23 @@ for s_i, ses_dict in sub_ses_run_map.items():
 
         # create p/dconn
         print('\nCreating p/dconn...')
-        pconn = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_FD_{fd_str}{smooth_str}.{ext_out}'
-        correlation_args = ['./cifti_correlation.sh', str(cifti_out), str(pconn), str(motion_file)]
+        conn = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_FD_{fd_str}{smooth_str}.{ext_out}'
+        correlation_args = ['./cifti_correlation.sh', str(cifti_out), str(conn), str(motion_file)]
         output = subprocess.run(correlation_args, capture_output=True, text=True, check=True)
         #print(f'{correlation_args}')
         if output.stderr.strip():
             raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
         print(f"{filter_output(output.stdout.strip())}")
 
+        # Convert to hdf5 if making dconns
+        if ext_out == 'dconn.nii':
+            # Convert dconn to hdf5
+            print('Converting dconn to hdf5...')
+            dconn_to_hdf5(conn)
+            # and now remove the dconn file
+            print('Removing dconn file...')
+            print(f"{conn} --> deleted.")
+            os.remove(conn)
         
         # remove individual runs and keep only concatenated session:
         print('\nRemoving individual run data...')
