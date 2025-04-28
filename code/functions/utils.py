@@ -75,3 +75,41 @@ def build_subject_session_run_map(csv_path):
         sub_ses_run_map[sub][ses] = runs
 
     return sub_ses_run_map
+
+
+
+# MSC
+def MSC_build_subject_session_map(csv_path):
+    """
+    Loads a CSV file containing subject and session mappings, and returns
+    a dictionary of the form:
+    {
+        subject_id: [list of sessions],
+        ...
+    }
+    """
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        raise RuntimeError(f"Failed to read CSV: {e}")
+
+    # Clean whitespace
+    df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+
+    required_columns = {'subject_id', 'session'}
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"CSV is missing required columns: {missing}")
+
+    # Build dictionary
+    sub_ses_map = {}
+    for _, row in df.iterrows():
+        sub = row['subject_id']
+        ses = row['session']
+
+        if sub not in sub_ses_map:
+            sub_ses_map[sub] = []
+
+        sub_ses_map[sub].append(ses)
+
+    return sub_ses_map
