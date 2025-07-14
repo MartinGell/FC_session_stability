@@ -6,12 +6,16 @@ import h5py
 import warnings
 import sys
 import os
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 
 from joblib import Parallel, delayed
 from statsmodels.regression.mixed_linear_model import MixedLM
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
+
+import time
+start_time = time.time()
 
 # Suppress convergence warnings from MixedLM
 # warnings.filterwarnings("ignore", category=ConvergenceWarning)
@@ -25,16 +29,16 @@ if not sys.warnoptions:
 ### User-specified parameters ###
 # Input/output directories and file paths
 feature = 'denoised_bold'
-indir = '/home/btervocl/shared/projects/martin_SNR/data/subpop'
-outdir = '/home/btervocl/shared/projects/martin_SNR/res/subpop'
+indir = '/home/btervocl/shared/projects/martin_FC_stability/data/subpop'
+outdir = '/home/btervocl/shared/projects/martin_FC_stability/res/subpop'
 file_paths = glob.glob(f"{indir}/sub-*/ses-*/*{feature}*.h5")
 
 # Chunking parameters
-n_jobs = 50  #  maximum number of jobs
+n_jobs = 120  #  maximum number of jobs
 
 # For 4B rows in a dconn, you might want to process only 40M rows at a time.
-start_row = 0          # Starting row index
-max_rows = 4_000_001   # Maximum number of rows to process in this run (None to process all rows)
+start_row = 1_750_000_001          # Starting row index 
+max_rows = 150_000_000  # Maximum number of rows to process in this run (None to process all rows) 
 # ---------------------------------------------------
 
 
@@ -57,8 +61,10 @@ else:
 
 # Total number of connections (rows) we will process in this run
 total_connections_to_process = end_row - start_row
-chunk_size = total_connections_to_process/n_jobs
-chunk_size = int(chunk_size)
+#chunk_size = total_connections_to_process/n_jobs
+#chunk_size = int(chunk_size)
+chunk_boundaries = np.linspace(start_row, end_row, num=n_jobs + 1, dtype=int)
+
 print(f"Processing connections from {start_row} to {end_row - 1} (total {total_connections_to_process}), in {n_jobs} chunks.")
 
 
@@ -66,8 +72,10 @@ print(f"Processing connections from {start_row} to {end_row - 1} (total {total_c
 def compute_icc_safe(data, col):
     '''
     Compute the intraclass correlation coefficient (ICC) for a given column
-    in a DataFrame. If an error occurs, return a dictionary with the column name
-    and the error message.
+    using a random intercept model. Skips fitting if NaNs are present.
+    Falls back to 'powell' optimizer if 'bfgs' fails to converge.
+
+    Returns a dictionary with model estimates and error status.
 
     Parameters
     ----------
@@ -82,15 +90,37 @@ def compute_icc_safe(data, col):
         A dictionary containing the column name, between-subject variance, within-
         subject variance, ICC, and any error that occurred during computation.
     '''
-    
     try:
-        # Fit the mixed-effects model (random intercept per subject)
-        model = MixedLM.from_formula(f'{col} ~ 1', groups='subject_id', data=data)
-        rslt = model.fit(method="bfgs")
+        # Early exit: skip if NaNs in column
+        if data[col].isna().any():
+            return {
+                'column': col,
+                'between_sub_var': 0,
+                'within_sub_var': 0,
+                'icc': 0,
+                'optimizer': 'Error',
+                'error': 'NaNs in column'
+            }
 
-        # Extract variances and compute ICC
-        between_sub_var = float(rslt.cov_re.iloc[0, 0])
-        within_sub_var = float(rslt.scale)
+        # First try with BFGS
+        model = MixedLM.from_formula(f'{col} ~ 1', groups='subject_id', data=data)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ConvergenceWarning)
+            rslt = model.fit(method="bfgs")
+
+        optimizer_used = "bfgs"
+
+        # If not converged, try Powell
+        if not rslt.converged:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", ConvergenceWarning)
+                rslt = model.fit(method="powell")
+            optimizer_used = "powell"
+
+        # Final convergence and variance estimates
+        converged = rslt.converged
+        between_sub_var = np.float32(rslt.cov_re.iloc[0, 0])
+        within_sub_var = np.float32(rslt.scale)
         icc = between_sub_var / (between_sub_var + within_sub_var)
 
         return {
@@ -98,14 +128,17 @@ def compute_icc_safe(data, col):
             'between_sub_var': between_sub_var,
             'within_sub_var': within_sub_var,
             'icc': icc,
+            'optimizer': optimizer_used,
             'error': None
         }
+
     except Exception as e:
         return {
             'column': col,
             'between_sub_var': 0,
             'within_sub_var': 0,
             'icc': 0,
+            'optimizer': 'Error',
             'error': str(e)
         }
 
@@ -129,8 +162,8 @@ def process_chunk(chunk_index):
     '''
 
     # Determine the slice for this chunk
-    chunk_start = start_row + chunk_index * chunk_size
-    chunk_end = min(chunk_start + chunk_size, end_row)
+    chunk_start = chunk_boundaries[chunk_index]
+    chunk_end = chunk_boundaries[chunk_index + 1]
     print(f"Processing chunk {chunk_index + 1}/{n_jobs}: connections {chunk_start} to {chunk_end - 1}")
 
     data = []
@@ -182,28 +215,63 @@ results_df = results_df.sort_values('column').reset_index(drop=True)
 
 print(results_df.head())
 
+# Print how many rows failed to converge on bfgs:
+print(f"\nNumber of rows that failed to converge with bfgs:")
+print(sum(results_df['optimizer'] == 'powell'))
+
 # Save the results to a dhf5 file
-file_out = f"{outdir}/mat_parts/icc_results_rows_{start_row}_to_{end_row}_TEST"
+print("Saving results to HDF5 file...")
+file_out = f"{outdir}/mat_parts/icc_results_rows_{start_row}_to_{end_row}.h5"
+Path(file_out).parent.mkdir(parents=True, exist_ok=True)
 
-results_df.to_csv(f'{file_out}.csv', index=False)
+results = results_df[['column', 'between_sub_var', 'within_sub_var', 'icc', 'optimizer']]
+results_df['optimizer'] = results_df['optimizer'].astype(str)
 
-h = h5py.File(f'{file_out}.h5', "w")
-h.create_dataset("results", data=results_df)
-h.create_dataset("start_row", data=start_row)
-h.create_dataset("end_row", data=end_row)
-h.create_dataset("connections", data=results_df.columns[2:])
-h.close()
+# Save the entire results DataFrame
+results_df.to_hdf(file_out, key='results', mode='w', format='table')
+print(f"{file_out}")
 
-print(f"{file_out} saved.")
+# Save individual arrays as separate HDF5 files
+icc_file = f"{outdir}/mat_parts/icc_rows_{start_row}_to_{end_row}.h5"
+between_sub_var_file = f"{outdir}/mat_parts/between_sub_var_rows_{start_row}_to_{end_row}.h5"
+within_sub_var_file = f"{outdir}/mat_parts/within_sub_var_rows_{start_row}_to_{end_row}.h5"
+
+connection_strings = results_df['column'].astype(str).values
+dt = h5py.string_dtype(encoding='utf-8')  # Variable-length UTF-8 strings
+
+with h5py.File(icc_file, 'w') as h5file:
+    h5file.create_dataset('icc', data=results_df['icc'].values)
+    h5file.create_dataset('connection', data=connection_strings, dtype=dt)  
+print(f"Saved ICC to {icc_file}")
+
+with h5py.File(between_sub_var_file, 'w') as h5file:
+    h5file.create_dataset('between_sub_var', data=results_df['between_sub_var'].values)
+    h5file.create_dataset('connection', data=connection_strings, dtype=dt)  
+print(f"Saved between_sub_var to {between_sub_var_file}")
+
+with h5py.File(within_sub_var_file, 'w') as h5file:
+    h5file.create_dataset('within_sub_var', data=results_df['within_sub_var'].values)
+    h5file.create_dataset('connection', data=connection_strings, dtype=dt)  
+print(f"Saved within_sub_var to {within_sub_var_file}")
+
+# check if the output directory exists, if not create it
+# Path(f'{file_out}.csv').parent.mkdir(parents=True, exist_ok=True)
+
+# results_df.to_csv(f'{file_out}.csv', index=False)
 
 # Save errors to a CSV file
+### this should all go into a separate folder in mat_parts called logs:
 error_log = results_df[results_df['error'].notnull()]
-error_log[['column', 'error']].to_csv(f'{outdir}/icc_error_log_rows_{start_row}_to_{end_row}_TEST.csv', index=False)
-print(f"Errors saved to {outdir}/icc_error_log.csv")
+error_file = f"{outdir}/icc_error_log_rows_{start_row}_to_{end_row}.csv"
+error_log[['column', 'error']].to_csv(error_file, index=False)
+print(f"Saving errors...")
+print(error_file)
 
-
+# and called hist:
 # Save histograms for quick viewing
 axes = results_df.hist(bins=50, figsize=(10, 8))
-plt.savefig(f'{outdir}/subpop_results_histograms_{feature}_rows_{start_row}_to_{end_row}_TEST.png')
+plt.savefig(f'{outdir}/subpop_results_histograms_{feature}_rows_{start_row}_to_{end_row}.png')
 plt.close()
 
+elapsed = time.time() - start_time
+print(f"\nFinished in {elapsed:.2f} seconds")
