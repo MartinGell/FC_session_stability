@@ -40,7 +40,7 @@ def build_subject_session_run_map(csv_path):
         raise RuntimeError(f"Failed to read CSV: {e}")
 
     # Clean whitespace
-    df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+    df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
 
     required_columns = {'subject_id', 'session', 'runs'}
     if not required_columns.issubset(df.columns):
