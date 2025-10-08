@@ -9,15 +9,15 @@ import nibabel as nb
 import numpy as np
 
 from functions.handling_outliers import isthisanoutlier
-from functions.utils import filter_output
+from functions.utils import filter_output, MSC_build_subject_session_map
 
 
 ######## OPTIONS ########
 # S3 Bucket location
-datasetdir = '/scratch.global/fayzu001/MSC/derivatives/xcpd/output'
+datasetdir = 's3://msc/derivatives/xcpd_0_10_7/output'
 
 # name the directory to save data to
-dataset = 'MSC' #'subpop'
+dataset = 'MSC_4runs' #'subpop'
 
 # Motion filter options
 fd_threshold = 0.2
@@ -41,27 +41,8 @@ run = ''
 
 # Name of the QC file which contains the framewise displacement (FD) values
 qc = 'abcc_qc' # 'abcc_qc'
-
-# List of subjects and sessions to process, excluding the 'sub-' and prefix
-# sub = ['MSC01']
-# ses = ['ses-func01', 'ses-func03', 'ses-func04', 'ses-func05', 'ses-func06', 'ses-func07', 'ses-func08', 'ses-func09', 'ses-func10']
-
-# sub = ['MSC02', 'MSC04', 'MSC05', 'MSC06', 'MSC07']
-# ses = ['ses-func01', 'ses-func02', 'ses-func03', 'ses-func04', 'ses-func05', 'ses-func06', 'ses-func07', 'ses-func08', 'ses-func09', 'ses-func10']
-
-# sub = ['MSC03']
-# ses = ['ses-func01', 'ses-func02', 'ses-func03', 'ses-func04', 'ses-func09', 'ses-func10']
-
-# sub = ['MSC09']
-# ses = ['ses-func01', 'ses-func02', 'ses-func03', 'ses-func04', 'ses-func05', 'ses-func06', 'ses-func08', 'ses-func09', 'ses-func10']
-
-sub = ['MSC10']
-ses = ['ses-func05', 'ses-func07', 'ses-func08', 'ses-func09', 'ses-func10']
 ###########################
 
-
-#/scratch.global/fayzu001/MSC/derivatives/xcpd/output/MSC01/sub-MSC01/ses-func01/func
-#/scratch.global/fayzu001/MSC/derivatives/xcpd/output/sub-MSC01/xcp_d/sub-MSC01/ses-func01/func/sub-MSC01_ses-func01_task-rest_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries.ptseries.nii
 
 # set up for naming purposes
 fd_str = str(fd_threshold).replace('.', '')
@@ -72,14 +53,18 @@ wd = os.getcwd()
 wd = Path(os.path.dirname(wd))
 out = wd / 'data'
 
-for sub_i in sub:
+# List of subjects and sessions to process, excluding the 'sub-' and prefix
+sublist = wd / 'code/sublist/MSC_subs_good_sessions_4runs.csv'
+sub_ses_map = MSC_build_subject_session_map(sublist)
+
+for sub_i, ses_list in sub_ses_map.items():
     print(f'\n\n\nSub: {sub_i}')
 
     outdir = out / dataset / f'sub-{sub_i}'
     # Create the directory if it doesn't exist
     outdir.mkdir(parents=True, exist_ok=True)
 
-    for ses_i in ses:
+    for ses_i in ses_list:
         print(f'\n\nSession: {ses_i}')
 
         outfile = outdir / ses_i
@@ -95,8 +80,7 @@ for sub_i in sub:
         s3_file = f'{s3_loc}/func/sub-{sub_i}_{ses_i}_task-{task}_{run_i}space-fsLR_{metric}.{ext_in}'
         cifti_in = outfile / 'func' / f'sub-{sub_i}_{ses_i}_task-{task}_{run_i}_space-fsLR_{metric}.{ext_in}'
         cifti_in.parent.mkdir(parents=True, exist_ok=True)
-        output = subprocess.run(['./copy_data.sh',str(s3_file),str(cifti_in)], capture_output=True, text=True, check=True)
-        #output = subprocess.run(['./get_data.sh',str(s3_file),str(cifti_in)], capture_output=True, text=True, check=True)
+        output = subprocess.run(['./get_data.sh',str(s3_file),str(cifti_in)], capture_output=True, text=True, check=True)
         if output.stderr.strip():
             raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
         print(f"{output.stdout.strip()}")
@@ -104,9 +88,7 @@ for sub_i in sub:
         # Motion
         s3_file = f'{s3_loc}/func/sub-{sub_i}_{ses_i}_task-{task}_{run_i}desc-{qc}.hdf5'
         motion_file = outfile / 'func' / f'sub-{sub_i}_{ses_i}_task-{task}_{run_i}_desc-{qc}.hdf5'
-
-        output = subprocess.run(['./copy_data.sh',str(s3_file),str(motion_file)], capture_output=True, text=True, check=True)
-        #output = subprocess.run(['./get_data.sh',str(s3_file),str(motion_file)], capture_output=True, text=True, check=True)
+        output = subprocess.run(['./get_data.sh',str(s3_file),str(motion_file)], capture_output=True, text=True, check=True)
         if output.stderr.strip():
             raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
         print(f"{output.stdout.strip()}")
@@ -116,6 +98,8 @@ for sub_i in sub:
             # Extract the binary mask indicating frame removal based on framewise displacement (FD) threshold.
             # Frames with FD > threshold are marked as 1 (removed), and frames with FD <= fd_threshold are marked as 0 (kept).
             motion = f['dcan_motion'][f'fd_{fd_threshold}']['binary_mask'][()].astype(int)
+            total_frames = f['dcan_motion']['fd_0.2']['total_frame_count'][()]
+            remaining_frames = f['dcan_motion']['fd_0.2']['remaining_total_frame_count'][()]
             TR = f['dcan_motion']['fd_0.2']['remaining_seconds'][()]/f['dcan_motion']['fd_0.2']['remaining_total_frame_count'][()]
             print(f"TR: {TR}")
         
@@ -157,7 +141,8 @@ for sub_i in sub:
             inverted_outlier = 1-outlier
             outlier_file = outfile / 'func' / f'{outfile}/sub-{sub_i}_{ses_i}_task-{task}_space-fsLR_{metric}_std_outlier.txt'
             np.savetxt(outlier_file, inverted_outlier, fmt='%d')
-            print(f'Flagged {np.sum(outlier).astype(int)} additional frames as outliers.')
+            n_extra_outliers = np.sum(outlier).astype(int)
+            print(f'Flagged {n_extra_outliers} additional frames as outliers.')
 
             # combine motion and outlier files
             print('\nCombining motion and outlier files and saving...')
@@ -166,7 +151,13 @@ for sub_i in sub:
             np.savetxt(combined_file, combined, fmt="%d")
             motion_file = combined_file
             minutes = sum(combined)*TR/60
+            percentage = ((remaining_frames-n_extra_outliers)/total_frames)*100
             print(f'Participant left with {minutes} minutes of data in this session.')
+            print(f'Participant left with {np.round(percentage,2)}% of total scan in this Run.')
+
+        if minutes < 20:
+            print(f'\n\nParticipant left with less than 20 minutes on this Run. SKIPPING...\n\n')
+            continue
 
         # Smooth if necessary
         if smooth:

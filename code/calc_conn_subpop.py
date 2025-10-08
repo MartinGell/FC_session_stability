@@ -28,27 +28,21 @@ fd_threshold = 0.2
 remove_outliers = True
 
 # Smoothing options
-smooth = False
-smoothing_kernel = 2
+smooth = True
+smoothing_kernel = 1.7
 
 
 ## File identification options ##
 # HELPER: sub-XXXXXX_ses-X_task-{task}_space-fsLR_{metric}.{ext_in}
-# task = 'restMENORDICtrimmed'
-# metric = 'den-91k_desc-denoised_bold'
-# ext_in = 'dtseries.nii'
-# ext_out = 'dconn.nii'
-
 task = 'restMENORDICtrimmed'
-metric = 'seg-Glasser_den-91k_stat-mean_timeseries'
-ext_in = 'ptseries.nii'
-ext_out = 'pconn.nii'
+metric = 'den-91k_desc-denoised_bold'
+ext_in = 'dtseries.nii'
+ext_out = 'dconn.nii'
 
-
-### Subjects, sessions and runs ###
-sublist = '/home/btervocl/shared/projects/martin_FC_stability/code/sublist/Subject_Sessions_with_Runs.csv'
-sub_ses_run_map = build_subject_session_run_map(sublist)
-ses_combined = 'ses-combined'  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
+# task = 'restMENORDICtrimmed'
+# metric = 'seg-Glasser_den-91k_stat-mean_timeseries'
+# ext_in = 'ptseries.nii'
+# ext_out = 'pconn.nii'
 ######## END OF OPTIONS ########
 
 
@@ -62,6 +56,11 @@ smooth_str = f'_smoothed_{smoothing_kernel}mm' if smooth else ''
 wd = os.getcwd()
 wd = Path(os.path.dirname(wd))
 out = wd / 'data'
+
+### Subjects, sessions and runs ###
+sublist = wd / 'code/sublist/Subject_Sessions_with_Runs.csv'
+sub_ses_run_map = build_subject_session_run_map(sublist)
+ses_combined = 'ses-combined'  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
 
 # Get data and create d/pconn
 for s_i, ses_dict in sub_ses_run_map.items():
@@ -77,6 +76,7 @@ for s_i, ses_dict in sub_ses_run_map.items():
     for new_ses, runs in ses_dict.items():
         ses_i = ses_combined
         print(f'\n\nSession: {ses_i}, creating {new_ses}')
+        print(f'Number of runs to concatenate: {runs}')
 
         outfile = outdir / new_ses
         # Create the directory if it doesn't exist
@@ -230,15 +230,15 @@ for s_i, ses_dict in sub_ses_run_map.items():
             raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
         print(f"{filter_output(output.stdout.strip())}")
 
-        # Convert to hdf5 if making dconns
-        if ext_out == 'dconn.nii':
-            # Convert dconn to hdf5
-            print('Converting dconn to hdf5...')
-            dconn_to_hdf5(conn)
-            # and now remove the dconn file
-            print('Removing dconn file...')
-            print(f"{conn} --> deleted.")
-            os.remove(conn)
+        # # Convert to hdf5 if making dconns
+        # if ext_out == 'dconn.nii':
+        #     # Convert dconn to hdf5
+        #     print('Converting dconn to hdf5...')
+        #     dconn_to_hdf5(conn)
+        #     # and now remove the dconn file
+        #     print('Removing dconn file...')
+        #     print(f"{conn} --> deleted.")
+        #     os.remove(conn)
         
         # remove individual runs and keep only concatenated session:
         print('\nRemoving individual run data...')
@@ -253,4 +253,4 @@ for s_i, ses_dict in sub_ses_run_map.items():
                 os.remove(motion_j)
             print(f"{motion_j} --> deleted.")
 
-
+print('\n\nFINISHED!!')
