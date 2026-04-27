@@ -15,8 +15,6 @@ import matplotlib.pyplot as plt
 import nibabel as nb
 from nilearn import connectome
 from joblib import Parallel, delayed
-#from pymer4.models import Lmer
-from statsmodels.regression.mixed_linear_model import MixedLM
 
 
 #warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -27,7 +25,7 @@ if not sys.warnoptions:
 
 
 feature = 'Glasser' # '4S1056Parcels'
-dataset = 'HCP_YA' # 'subpop', 'MSC', HCPtrt_cneuro
+dataset = 'HCP_YA25'
 ####################################### 
 
 
@@ -75,30 +73,6 @@ def compute_icc_safe(data, col):
         # fit the mixed-effects model
         between_sub_var = data[col].var(ddof=1)
 
-        # model = MixedLM.from_formula(f'{str(col)} ~ 1', groups='subject_id', data=data)
-        # rslt = model.fit(method=["bfgs"])
-
-        # # extract variances and calc icc
-        # between_sub_var = rslt.cov_re.iloc[0, 0].astype(np.float16)
-        # within_sub_var = rslt.scale.astype(np.float16)
-        # icc = between_sub_var / (between_sub_var + within_sub_var)
-        
-    #     return {
-    #         'column': col,
-    #         'between_sub_var': between_sub_var,
-    #         'within_sub_var': within_sub_var,
-    #         'icc': icc,
-    #         'error': None
-    #     }
-
-    # except Exception as e:
-    #     return {
-    #         'column': col,
-    #         'between_sub_var': 0,
-    #         'within_sub_var': 0,
-    #         'icc': 0,
-    #         'error': str(e)
-    #     }
         return {
             'column': col,
             'between_sub_var': between_sub_var,
@@ -162,13 +136,13 @@ print(f'saving: {f'{outdir}/{dataset}_results_histograms_{feature}.png'}')
 
 
 ###########################
-icc_mat = connectome.vec_to_sym_matrix(upper,diagonal=np.repeat(np.nan,len(dat)))
-np.fill_diagonal(icc_mat, 1)
+mat = connectome.vec_to_sym_matrix(upper,diagonal=np.repeat(np.nan,len(dat)))
+np.fill_diagonal(mat, 1)
 
 cmap_custom = plt.cm.RdBu_r
 
 plt.figure(figsize=(7, 7))
-plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=-1, vmax=1)
+plt.imshow(mat, origin='lower', cmap=cmap_custom, vmin=-1, vmax=1)
 cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
@@ -180,13 +154,13 @@ plt.close()
 
 
 
-icc_mat = connectome.vec_to_sym_matrix(results['between_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
-np.fill_diagonal(icc_mat, 0)
+mat = connectome.vec_to_sym_matrix(results['between_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
+np.fill_diagonal(mat, 0)
 
 cmap_custom = plt.cm.YlGnBu
 
 plt.figure(figsize=(7, 7))
-plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
+plt.imshow(mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
 cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
@@ -196,40 +170,40 @@ plt.savefig(f'{file2save}', dpi=180)
 plt.close()
 
 
-# TEST -> scalling BW by icc
-MSC_res = pd.read_csv(f'/home/btervocl/shared/projects/martin_FC_stability/res/MSC/MSC_icc_variances_Glasser.csv')
+# # TEST -> scalling BW by icc
+# MSC_res = pd.read_csv(f'/home/btervocl/shared/projects/martin_FC_stability/res/MSC/MSC_icc_variances_Glasser.csv')
 
-scaled_BW = MSC_res['icc'] * results['between_sub_var']
+# scaled_BW = MSC_res['icc'] * results['between_sub_var']
 
-icc_mat = connectome.vec_to_sym_matrix(scaled_BW,diagonal=np.repeat(np.nan,len(dat)))
-np.fill_diagonal(icc_mat, 0)
+# mat = connectome.vec_to_sym_matrix(scaled_BW,diagonal=np.repeat(np.nan,len(dat)))
+# np.fill_diagonal(mat, 0)
 
-cmap_custom = plt.cm.YlGnBu
+# cmap_custom = plt.cm.YlGnBu
 
-plt.figure(figsize=(7, 7))
-plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
-cbar = plt.colorbar(fraction=0.046)
-plt.show()
+# plt.figure(figsize=(7, 7))
+# plt.imshow(mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
+# cbar = plt.colorbar(fraction=0.046)
+# plt.show()
 
-file2save = outdir / 'plots' / f"SCALED_BW_{dataset}_by_MSCicc_{feature}.png"
-print(f'saving: {file2save}')
-plt.savefig(f'{file2save}', dpi=180)
-plt.close()
+# file2save = outdir / 'plots' / f"SCALED_BW_{dataset}_by_MSCicc_{feature}.png"
+# print(f'saving: {file2save}')
+# plt.savefig(f'{file2save}', dpi=180)
+# plt.close()
 
-# TEST -> scalling BW by WV
-scaled_BW = results['between_sub_var'] - MSC_res['within_sub_var']
+# # TEST -> scalling BW by WV
+# scaled_BW = results['between_sub_var'] - MSC_res['within_sub_var']
 
-icc_mat = connectome.vec_to_sym_matrix(scaled_BW,diagonal=np.repeat(np.nan,len(dat)))
-np.fill_diagonal(icc_mat, 0)
+# mat = connectome.vec_to_sym_matrix(scaled_BW,diagonal=np.repeat(np.nan,len(dat)))
+# np.fill_diagonal(mat, 0)
 
-cmap_custom = plt.cm.YlGnBu
+# cmap_custom = plt.cm.YlGnBu
 
-plt.figure(figsize=(7, 7))
-plt.imshow(icc_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
-cbar = plt.colorbar(fraction=0.046)
-plt.show()
+# plt.figure(figsize=(7, 7))
+# plt.imshow(mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
+# cbar = plt.colorbar(fraction=0.046)
+# plt.show()
 
-file2save = outdir / 'plots' / f"BW_{dataset}_with_MSCwv_subtracted_{feature}.png"
-print(f'saving: {file2save}')
-plt.savefig(f'{file2save}', dpi=180)
-plt.close()
+# file2save = outdir / 'plots' / f"BW_{dataset}_with_MSCwv_subtracted_{feature}.png"
+# print(f'saving: {file2save}')
+# plt.savefig(f'{file2save}', dpi=180)
+# plt.close()
