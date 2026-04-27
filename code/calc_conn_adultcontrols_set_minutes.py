@@ -1,12 +1,12 @@
 
-import glob
 import os
 import subprocess
+import shutil
 import h5py
 import nibabel as nb
 import numpy as np
 import pandas as pd
-import shutil
+import glob
 
 from pathlib import Path
 
@@ -17,11 +17,13 @@ from functions.dconn_shrinker import dconn_to_hdf5
 
 ######## OPTIONS ########
 # S3 Bucket location
-#datasetdir = 's3://subpop/derivatives/xcpd/output'
-datasetdir = 's3://subpop-v1.0/derivatives/xcpd0.12.0/output'
+datasetdir = 's3://prelim-secret-data/xcpd'
 
 # total minutes of data to keep per session
 total_minutes = 25
+
+# name the directory to save data to
+dataset = f'adultcontrols{total_minutes}'
 
 # Motion filter options
 fd_threshold = 0.2
@@ -33,20 +35,18 @@ remove_outliers = True
 smooth = False
 smoothing_kernel = 1.7
 
-
 ## File identification options ##
 # HELPER: sub-XXXXXX_ses-X_task-{task}_space-fsLR_{metric}.{ext_in}
-# task = 'restMENORDICtrimmed'
+# task = 'restMENORDICrmnoisevols'
 # metric = 'den-91k_desc-denoised_bold'
 # ext_in = 'dtseries.nii'
 # ext_out = 'dconn.nii'
 
-task = 'restNORDIC'
-metric = 'seg-Gordon_den-91k_stat-mean_timeseries'
+task = 'restMENORDICrmnoisevols'
+metric = 'seg-Glasser_den-91k_stat-mean_timeseries'
 ext_in = 'ptseries.nii'
 ext_out = 'pconn.nii'
 ######## END OF OPTIONS ########
-
 
 
 
@@ -60,40 +60,26 @@ wd = Path(os.path.dirname(wd))
 out = wd / 'data'
 
 ### Subjects, sessions and runs ###
-#sublist = wd / 'code' / 'sublist' / 'Subpop_v1_UMN_sub_ses_3plus_run_25min.csv'
-sublist = wd / 'code' / 'sublist' / 'Subpop_v1_WashU_sub_ses_3plus_run_25min.csv'
+sublist = wd / 'code/sublist/adultcontrols_subject_session_individual_runs.csv' # best place to find this information is in the json files in derivatives/nordic/ on MSI
 sub_ses_run_map = build_subject_session_run_map(sublist)
 ses_combined = 'ses-combined'  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
 
-# name the directory to save data to
-if 'WashU' in str(sublist):
-    dataset = f'subpop_WashU{total_minutes}'
-else:
-    dataset = f'subpop_UMN{total_minutes}'
-
-print(f'\nCREATING DATASET: {dataset}')
 
 # Get data and create d/pconn
 for s_i, ses_dict in sub_ses_run_map.items():
     sub_i = s_i.split('-')
-    sub_i = sub_i[1]+sub_i[2]
+    sub_i = sub_i[1]
 
-    print(f'\n\n\n\n')
-    print('=================')
-    print(f'Subject: {sub_i}')
-    print('=================')
+    print(f'\n\n\n\nSub: {sub_i}')
+
     outdir = out / dataset / f'sub-{sub_i}'
     # Create the directory if it doesn't exist
     outdir.mkdir(parents=True, exist_ok=True)
     
     for new_ses, runs in ses_dict.items():
         ses_i = ses_combined
-        print(f'\n\n')
-        print(f'Session: {ses_i}, creating:')
-        print('---------')
-        print(f'| {new_ses} |')
-        print('---------')
-        print(f'\nNumber of runs to concatenate: {runs}')
+        print(f'\n\n\nSession: {ses_i}, creating {new_ses}')
+        print(f'Number of runs to concatenate: {runs}')
 
         outfile = outdir / new_ses
         # Create the directory if it doesn't exist
@@ -103,32 +89,19 @@ for s_i, ses_dict in sub_ses_run_map.items():
         n_runs = len(runs)
         print(f'\nGoing to keep {total_minutes} minutes across all runs')
         print(f'\nFound {n_runs} runs for this session')
-        # if sub_i == '1007501' and runs == ['run-07', 'run-08', 'run-09'] and total_minutes >= 25:
-        #     # Special case for sub-1007501, ses-3, which has only 5.2 minutes of data in run-09
-        #     shorter_run_minutes = 5.78
-        #     leftover_minutes = total_minutes - shorter_run_minutes
-        #     longer_run_minutes = leftover_minutes * (16/32)
-        #     print(f'Splitting into: {longer_run_minutes} for run 1, {longer_run_minutes} for run 2, and {shorter_run_minutes} for run 3')
-        #     print(f'Which is: {longer_run_minutes * 2 + shorter_run_minutes} minutes in total')
-        # elif n_runs == 3:
-        #     longer_run_minutes = total_minutes * (16/42)  # longer runs are 16 minutes long
-        #     shorter_run_minutes = total_minutes * (10/42) # shorter run is 10 minutes long
-        #     print(f'Splitting into: {longer_run_minutes} for run 1, {longer_run_minutes} for run 2, and {shorter_run_minutes} for run 3')
-        #     print(f'Which is: {longer_run_minutes * 2 + shorter_run_minutes} minutes in total')
-        # elif n_runs == 2:
-        #     longer_run_minutes = total_minutes * (16/32)
-        #     print(f'Splitting into: {longer_run_minutes} for run 1, and {longer_run_minutes} for run 2')
-        #     print(f'Which is: {longer_run_minutes * 2} minutes in total')
+        # if n_runs == 4:
+        #     mintutes_per_run = total_minutes/4
+        #     print(f'Grabbing {mintutes_per_run} minutes per run')
         # else:
-        #     raise ValueError(f"Unexpected number of runs: {n_runs}. Expected 2 or 3.")
+        #     raise ValueError(f"Unexpected number of runs: {n_runs}. Expected 4.")
 
-        # Now get run data and motion files prepare for shortening and concatenation
+        # Now get run data and motion files to prepare for shortening and concatenation
         runs_info = []
-        print('\n\nGetting data...')
+        print('\nGetting data...')
         for run_i in runs:
             print(f'\nFile: {run_i}')
 
-            s3_loc =  f'{datasetdir}/{sub_i}/sub-{sub_i}/{ses_i}'
+            s3_loc =  f'{datasetdir}/sub-{sub_i}_{ses_combined}/sub-{sub_i}/{ses_i}'
 
             # BOLD
             s3_file = f'{s3_loc}/func/sub-{sub_i}_{ses_i}_task-{task}_{run_i}_space-fsLR_{metric}.{ext_in}'
@@ -137,7 +110,7 @@ for s_i, ses_dict in sub_ses_run_map.items():
             output = subprocess.run(['./get_data.sh',str(s3_file),str(cifti_out)], capture_output=True, text=True, check=True)
             if output.stderr.strip():
                 raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
-            print(f"{output.stdout.strip()}")
+            print(f"{output.stdout.strip()}")        
 
             # Motion
             s3_file = f'{s3_loc}/func/sub-{sub_i}_{ses_i}_task-{task}_{run_i}_desc-abcc_qc.hdf5'
@@ -150,16 +123,14 @@ for s_i, ses_dict in sub_ses_run_map.items():
 
             # Load the motion file
             with h5py.File(motion_file_run, 'r') as f:
-            # Extract the binary mask indicating frame removal based on framewise displacement (FD) threshold.
-            # Frames with FD > threshold are marked as 1 (removed), and frames with FD <= fd_threshold are marked as 0 (kept).
+                # Extract the binary mask indicating frame removal based on framewise displacement (FD) threshold.
+                # Frames with FD > threshold are marked as 1 (removed), and frames with FD <= fd_threshold are marked as 0 (kept).
                 motion = f['dcan_motion'][f'fd_{fd_threshold}']['binary_mask'][()].astype(int)
                 total_frames = f['dcan_motion']['fd_0.2']['total_frame_count'][()]
                 remaining_frames = f['dcan_motion']['fd_0.2']['remaining_total_frame_count'][()]
                 TR = f['dcan_motion']['fd_0.2']['remaining_seconds'][()]/remaining_frames
-                print(f"TR: {TR}") # Should be 1.761
+                print(f"TR: {TR}")
 
-            TR = 1.761 # hardocode in case its calculated incorrectly 
-            
             inverted_motion = 1-motion     # NEED TO INVERT FOR wb_command as it expects 0 = remove, 1 = keep
             motion_file_run = outfile / 'func' / f'sub-{sub_i}_{new_ses}_task-{task}_{run_i}_desc-FD_{fd_str}.txt'
             print('\nSaving extracted motion file...')
@@ -170,7 +141,7 @@ for s_i, ses_dict in sub_ses_run_map.items():
             if remove_outliers:
                 # First run wb_command and load the std.txt file as its faster
                 print('\nIdentifying outliers using the median approach...')
-                std_txt = outfile / 'func' / f'sub-{sub_i}_{new_ses}_task-{task}_{run_i}_space-fsLR_{metric}_std.txt'
+                std_txt = outfile / 'func' / f'sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_std.txt'
                 stats_args = ['./cifti_std.sh', str(cifti_out), str(std_txt)]
                 output = subprocess.run(stats_args, capture_output=True, text=True)
                 #print(f'{stats_args}')
@@ -204,44 +175,6 @@ for s_i, ses_dict in sub_ses_run_map.items():
                 print('\nCombining motion and outlier files and saving...')
                 combined = np.logical_and(inverted_motion, inverted_outlier).astype(int)
                 combined_file = outfile / 'func' / f'sub-{sub_i}_{new_ses}_task-{task}_{run_i}_desc-FD_{fd_str}_and_outliers_combined.txt'
-                
-                # minutes = sum(combined)*TR/60
-                # print(f'\nParticipant has {minutes} minutes of data in this run.')
-
-                # ##### Isnt the maximum number of frames written in the motion file????
-                # this_run_total_minutes = total_frames * TR / 60
-                # if this_run_total_minutes > 12: 
-                #     # longer runs are 16 minutes long so we can assume if the run has more than 12 minutes it is a longer run
-                #     x_min = longer_run_minutes
-                # else:
-                #     x_min = shorter_run_minutes
-                    
-                # print(f'\nShortening this run to {x_min} minutes of data...')
-                # max_frames = int(np.round(x_min*60/TR, 0)) # maximum frames for x_min minutes at TR = 1.761
-                # one_indices = np.flatnonzero(combined)
-                # if len(one_indices) >= max_frames:
-                #     cut_off_index = one_indices[max_frames-1]
-                #     print(f'\nCutting off at index {cut_off_index} to keep only the first ~ {x_min} minutes ({max_frames} frames).')
-                #     combined[cut_off_index + 1:] = 0
-                # elif len(one_indices) <= max_frames and n_runs == 2:
-                #     print(f'\n\n\n\nWARNING !!!!!!!!!!!!!')
-                #     print(f'Subject has only 2 runs and one does not have enough frames to cut off to {x_min} minutes.')
-                #     print(f'Found {len(one_indices)} frames, Taking all.\n\n\n\n')
-                # else:
-                #     print(f'\n\n\n\nWARNING !!!!!!!!!!!!!')
-                #     print(f'Not enough frames to cut off to {x_min} minutes. Found {len(one_indices)} frames, expected at least {max_frames}.\n\n\n\n')
-                #     print(f'Will take all frames instead.')
-                #     # raise ValueError(
-                #     #     f"Not enough frames to cut off to 10 minutes. Found {len(one_indices)} frames, expected at least {max_frames}."
-                #     # )
-
-                # minutes = sum(combined)*TR/60
-                # print(f'Participant now left with {minutes} minutes of data in this run.')
-
-                # print(f'\nSaving shortened motion file...\n')
-                # np.savetxt(combined_file, combined, fmt="%d")
-
-                # motion_file_run = combined_file # make sure to use the combined file if outliers were removed for the next steps
 
                 this_run_minutes = sum(combined)*TR/60
                 print(f'\nParticipant has {this_run_minutes} minutes of data in this run.')
@@ -254,27 +187,8 @@ for s_i, ses_dict in sub_ses_run_map.items():
 
         # Now set up everything for concatenation and trim run data to the requested mintues across whole session
         print('\n______________________DONE_WITH_INDIVIDUAL_RUNS______________________')
-        #print('\nConcatenating motion files...')
         print(f'\nShortening this session to {total_minutes} minutes of data...')
-
-        # ending = motion_file_run.as_posix().split('-').pop()
-        # motion_files = glob.glob(f'{outfile}/func/*{ending}')
-        # motion_list = []
-        # # load all motion files
-        # for m_file_i in motion_files:
-        #     m_i = np.loadtxt(m_file_i, dtype=int)
-        #     motion_list.append(m_i)
-        # motion = np.concatenate(motion_list)
-        # # Check that shortening worked
-        # minutes = sum(motion)*TR/60
-        # # This is already INVERTED for wb_command: 0 = remove, 1 = keep
-        # print(f'\n\nAFTER CONCATENATION participant left with {minutes} minutes of data.')
-        # print(f'This amounts to {np.sum(motion).astype(int)} frames out of {len(motion)}') # Here summing inverted motion
-        # # Save
-        # motion_file = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_desc-FD_{fd_str}.txt'
-        # print('\nSaving concatenated motion file...')
-        # np.savetxt(motion_file, motion, fmt="%d")
-
+        
         # Check if TR differs across runs
         TR_ref = runs_info[0].TR
         if any(abs(r_i.TR - TR_ref) > 1e-6 for r_i in runs_info):
@@ -283,11 +197,11 @@ for s_i, ses_dict in sub_ses_run_map.items():
 
         # Find optimal minute allocation across runs given differences in usable minutes per run
         assigned, target, total_usable, grace = allocate_minutes_with_grace(
-            [r_i.usable_minutes for r_i in runs_info], total_minutes, TR_ref, leaway_TR=7.0
-        ) # +-7 TR = approx. 12 seconds
+            [r_i.usable_minutes for r_i in runs_info], total_minutes, TR_ref
+        )
 
         if assigned is None:
-            print(f"\nThere are only {total_usable:.2f} usable minutes across session")
+            print(f"\nThere are only {total_usable:.2f} usable minutes across session)")
             print(f"\nThis is below requested threshold. SKIPPING SESSION.\n")
             continue
         # elif target < total_minutes:
@@ -313,19 +227,17 @@ for s_i, ses_dict in sub_ses_run_map.items():
         kept_minutes_total = (session_mask.sum() * TR_ref) / 60.0
         print(f"\nSaved final session mask. Minutes kept: {kept_minutes_total:.2f}.\n")
 
-
-        # concat all of ses-x time series
+        # Next concat all rest runs files
         print('\nConcatenating d/pseries...')
         runs = glob.glob(f'{outfile}/func/*{metric}.{ext_in}')
         file_in = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}.{ext_in}'
         merge_args = ['./cifti_merge.sh', str(file_in)]
         merge_args.extend([str(run) for run in runs if run is not None])  # Only include non-None runs
         output = subprocess.run(merge_args, capture_output=True, text=True, check=True)
-        # should look like this: ./concat_cifti_merge.sh cifti_out run1 run2 ...
+        # should look like this: ./concat_cifti_merge.sh file_in run1 run2 ...
         if output.stderr.strip():
             raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
         print(f"{filter_output(output.stdout.strip())}")
-
 
         # Smooth if necessary
         if smooth:
@@ -359,14 +271,13 @@ for s_i, ses_dict in sub_ses_run_map.items():
             # Now actually smooth            
             print('\nSmoothing...')
             smooth_out = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_space-fsLR_{metric}_smoothed_{smoothing_kernel}.{ext_in}'
-            smooth_args = ['./cifti_smooth.sh', str(cifti_out), str(smooth_out), str(smoothing_kernel), str(surf_L), str(surf_R)]
+            smooth_args = ['./cifti_smooth.sh', str(file_in), str(smooth_out), str(smoothing_kernel), str(surf_L), str(surf_R)]
             output = subprocess.run(smooth_args, capture_output=True, text=True, check=True)
             if output.stderr.strip():
                 raise RuntimeError(f"Error from wb cmd:\n{output.stderr.strip()}")
             print(f"{filter_output(output.stdout.strip())}")
 
             file_in = smooth_out
-
 
         # create p/dconn
         print('\nCreating p/dconn...')
