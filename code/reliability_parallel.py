@@ -1,5 +1,5 @@
 
-# USE Conda env: martin_SNR
+# USE Conda env: martin_snr
 
 import numpy as np
 import pandas as pd
@@ -26,8 +26,8 @@ if not sys.warnoptions:
 n_batches = 80 # Number of parallel jobs to run
 
 # Which feature and dataset (folder) to use
-feature = 'Glasser' # '4S1056Parcels' 'Glasser'
-dataset = 'subpop_WashU25' # 'subpop', 'MSC', HCPtrt_cneuro, MSC_4runs subpop_22.5mins adultcontrols25
+feature = 'Gordon' # '4S1056Parcels' 'Glasser'
+dataset = 'subpop_WashU25' # 'subpop', 'MSC', HCPtrt_cneuro, MSC_4runs subpop_UMN25 adultcontrols25
 ####################################### 
 
 
@@ -42,6 +42,11 @@ outdir.mkdir(parents=True, exist_ok=True)
 if feature == 'Glasser':
     # Load Glasser sorting index
     indsort = np.loadtxt(f'{wd}/data/cortex_subcortex_community_order.txt',dtype=int) -1
+    indsort.shape = (len(indsort),1)
+elif feature == 'Gordon':
+    atlas = pd.read_csv(f'{wd}/data/Gordon_network_order.csv')
+    atlas = atlas.drop(range(333, len(atlas)), axis=0)  # drop the extra rows that are not in the matrix
+    indsort = atlas['parcel_order'].values.argsort()
     indsort.shape = (len(indsort),1)
 else:
     raise ValueError(f'Unknown feature order: {feature}')
@@ -74,17 +79,23 @@ for file_i in sorted(file_paths):
     # sort and plot FC matrix
     sorted_mat = dat[indsort,indsort.T]
 
-    # cmap_custom = plt.cm.RdBu_r
+    # remove rows/columns that are entirely NaN (excluding diagonal)
+    mat_no_diag = sorted_mat.copy()
+    np.fill_diagonal(mat_no_diag, np.nan)
+    nan_rows = np.all(np.isnan(mat_no_diag), axis=1)
+    sorted_mat = sorted_mat[~nan_rows, :][:, ~nan_rows]
 
-    # file2save = outdir / 'plots' / 'FC' / f"{parts[-1].split(".")[0]}.png"
-    # file2save.parent.mkdir(parents=True, exist_ok=True)
-    # print(f'saving: {file2save}')
+    cmap_custom = plt.cm.RdBu_r
 
-    # plt.figure(figsize=(7, 7))
-    # plt.imshow(sorted_mat, origin='lower', cmap=cmap_custom, vmin=-1, vmax=1)
-    # cbar = plt.colorbar(fraction=0.046)
-    # plt.savefig(f'{file2save}', dpi=180)
-    # plt.close()
+    file2save = outdir / 'plots' / 'FC' / feature / f"{parts[-1].split(".")[0]}.png"
+    file2save.parent.mkdir(parents=True, exist_ok=True)
+    print(f'saving: {file2save}')
+
+    plt.figure(figsize=(7, 7))
+    plt.imshow(sorted_mat, origin='lower', cmap=cmap_custom, vmin=-1, vmax=1)
+    cbar = plt.colorbar(fraction=0.046)
+    plt.savefig(f'{file2save}', dpi=180)
+    plt.close()
 
     # save upper triangle
     print(dat.shape)
@@ -203,10 +214,15 @@ print(f'saving: {f'{outdir}/{dataset}_results_histograms_{feature}.png'}')
 
 
 ########## PLOTTING RESULTS ##############
-if dataset.startswith('subpop'):
+if dataset.startswith('subpop_UMN'):
     # Load reference subject data
     print('\nUsing subpop reference subject data')
-    pconn = nb.load(f'{indir}/sub-1000201/ses-1/sub-1000201_ses-1_task-restMENORDICtrimmed_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    pconn = nb.load(f'{indir}/sub-1000201/ses-1/sub-1000201_ses-1_task-restNORDIC_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    pconn_data = pconn.get_fdata()
+elif dataset.startswith('subpop_WashU'):
+    # Load reference subject data
+    print('\nUsing subpop WashU reference subject data')
+    pconn = nb.load(f'{indir}/sub-2003101/ses-3/sub-2003101_ses-3_task-restNORDIC_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
     pconn_data = pconn.get_fdata()
 elif dataset.startswith('MSC'):
     # Load reference subject data
@@ -242,6 +258,7 @@ cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
 file2save = outdir / 'plots' / f"BW_{dataset}_{feature}.png"
+file2save.parent.mkdir(parents=True, exist_ok=True)
 print(f'saving: {file2save}')
 plt.savefig(f'{file2save}', dpi=180)
 plt.close()
