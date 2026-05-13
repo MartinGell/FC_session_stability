@@ -1,6 +1,10 @@
 
 import pandas as pd
 import ast
+import numpy as np
+import math
+
+from dataclasses import dataclass
 
 
 def filter_output(output: str) -> str:
@@ -113,3 +117,67 @@ def MSC_build_subject_session_map(csv_path):
         sub_ses_map[sub].append(ses)
 
     return sub_ses_map
+
+
+# for saving run info
+@dataclass
+class RunInfo:
+    run_name: str
+    keep_mask: np.ndarray  # 1=keep, 0=drop
+    usable_minutes: float
+    TR: float
+
+def minutes_to_frames(minutes, TR):
+    """Convert minutes to frames given TR in seconds."""
+    return int(math.ceil((minutes * 60.0) / TR))
+
+def trim_mask_to_minutes(mask, TR, minutes_to_keep):
+    if minutes_to_keep <= 0:
+        return np.zeros_like(mask, dtype=int)
+    # don't request more frames than exist
+    k_frames = min(np.count_nonzero(mask), minutes_to_frames(minutes_to_keep, TR))
+    one_idx = np.flatnonzero(mask == 1)
+    if len(one_idx) < k_frames:
+        raise ValueError("Requested more frames than available in mask.")
+    cut = one_idx[k_frames - 1]
+    trimmed = mask.copy()
+    trimmed[cut + 1:] = 0
+    return trimmed
+
+def allocate_minutes_with_grace(usable_minutes, requested_total_minutes, TR, leaway_TR=3.0):
+    """
+    Allocate minutes across runs with a 3*TR grace threshold.
+
+    - If sum(usable) + 3*TR < requested_total -> not enough data (returns None)
+    - Else allocate to target = min(requested_total, sum(usable))
+    """
+    total_usable = float(sum(usable_minutes))
+    grace_minutes = (leaway_TR * TR) / 60.0
+
+    # Fail if total usable + grace < target
+    if total_usable + grace_minutes < requested_total_minutes:
+        return None, requested_total_minutes, total_usable, grace_minutes
+
+    target = min(requested_total_minutes, total_usable)
+    n = len(usable_minutes)
+    base = target / n
+    assigned = [min(base, u) for u in usable_minutes]
+    deficit = target - sum(assigned)
+
+    # Greedy fill to reach target
+    while deficit > 1e-9:
+        updated = False
+        for i in range(n):
+            spare = usable_minutes[i] - assigned[i]
+            if spare <= 0:
+                continue
+            inc = min(spare, deficit)
+            assigned[i] += inc
+            deficit -= inc
+            updated = True
+            if deficit <= 1e-9:
+                break
+        if not updated:
+            break  # done
+
+    return assigned, target, total_usable, grace_minutes
