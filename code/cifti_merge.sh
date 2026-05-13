@@ -8,31 +8,14 @@
 module load workbench/1.5.0
 
 cifti_out=${1}
-
-cifti_1=${2}
-cifti_2=${3:-""}  # Use an empty string if not provided
-cifti_3=${4:-""}  # Use an empty string if not provided
-cifti_4=${5:-""}  # Use an empty string if not provided
-cifti_5=${6:-""}  # Use an empty string if not provided
-
+# Remove the first argument (output file) from the list of arguments to dynamically construct the call
+shift
 
 # Construct the wb_command arguments dynamically
 wb_command_args="-cifti-merge ${cifti_out}"
-if [[ -n ${cifti_1} ]]; then
-    wb_command_args+=" -cifti ${cifti_1}"
-fi
-if [[ -n ${cifti_2} ]]; then
-    wb_command_args+=" -cifti ${cifti_2}"
-fi
-if [[ -n ${cifti_3} ]]; then
-    wb_command_args+=" -cifti ${cifti_3}"
-fi
-if [[ -n ${cifti_4} ]]; then
-    wb_command_args+=" -cifti ${cifti_4}"
-fi
-if [[ -n ${cifti_5} ]]; then
-    wb_command_args+=" -cifti ${cifti_5}"
-fi
+for cifti in "$@"; do
+    wb_command_args+=" -cifti ${cifti}"
+done
 
 echo -e "\n\nConcatenating ciftis using wb cmd..."  
 echo -e ${wb_command_args}
