@@ -150,15 +150,18 @@ def allocate_minutes_with_grace(usable_minutes, requested_total_minutes, TR, lea
 
     - If sum(usable) + 3*TR < requested_total -> not enough data (returns None)
     - Else allocate to target = min(requested_total, sum(usable))
+    - Pass requested_total_minutes=None to use all available minutes across runs.
     """
     total_usable = float(sum(usable_minutes))
     grace_minutes = (leaway_TR * TR) / 60.0
 
-    # Fail if total usable + grace < target
-    if total_usable + grace_minutes < requested_total_minutes:
-        return None, requested_total_minutes, total_usable, grace_minutes
-
-    target = min(requested_total_minutes, total_usable)
+    if requested_total_minutes is None:
+        target = total_usable
+    else:
+        # Fail if total usable + grace < target
+        if total_usable + grace_minutes < requested_total_minutes:
+            return None, requested_total_minutes, total_usable, grace_minutes
+        target = min(requested_total_minutes, total_usable)
     n = len(usable_minutes)
     base = target / n
     assigned = [min(base, u) for u in usable_minutes]
@@ -181,3 +184,61 @@ def allocate_minutes_with_grace(usable_minutes, requested_total_minutes, TR, lea
             break  # done
 
     return assigned, target, total_usable, grace_minutes
+
+
+def sample_continuous_chunk(mask, TR, minutes_to_sample, leaway_TR=3.0, offset=0, seed=None):
+    """
+    Randomly sample a contiguous chunk of x usable minutes from a concatenated mask.
+
+    A random start frame is chosen uniformly from all valid positions — i.e. frames
+    where at least k good frames remain.  The window then extends to the k-th good
+    frame from that start, naturally absorbing internal motion-flagged frames without
+    over-extending into new bad frames.
+
+    Returns a new mask that is zero everywhere except [start, cut], where the
+    original mask values (including internal 0s) are preserved.
+
+    Returns (chunk_mask, target, total_usable_minutes, grace_minutes).
+    chunk_mask is None when there is insufficient data.
+
+    Parameters
+    ----------
+    mask : np.ndarray           Concatenated keep mask (1=keep, 0=drop).
+    TR : float                  Repetition time in seconds.
+    minutes_to_sample : float   Desired usable data in minutes.
+    leaway_TR : float           Grace threshold in TRs (default 3).
+    offset : int                Earliest frame to consider as a start position.
+    seed : int or None          RNG seed for reproducibility.
+    """
+    mask = np.asarray(mask, dtype=int)
+    available = mask[offset:]
+
+    total_usable = int(np.count_nonzero(available))
+    total_usable_minutes = (total_usable * TR) / 60.0
+    grace_minutes = (leaway_TR * TR) / 60.0
+
+    if total_usable_minutes + grace_minutes < minutes_to_sample:
+        return None, minutes_to_sample, total_usable_minutes, grace_minutes
+
+    k_frames = min(total_usable, minutes_to_frames(minutes_to_sample, TR))
+    one_idx = np.flatnonzero(available == 1)
+
+    # Latest valid start: the (total_usable - k_frames)-th good frame.
+    # Starting any later leaves fewer than k good frames remaining.
+    last_valid_start = int(one_idx[total_usable - k_frames])
+
+    rng = np.random.default_rng(seed)
+    start = int(rng.integers(0, last_valid_start + 1))
+
+    # Find cut: position of the k-th good frame on or after start
+    good_from_start = one_idx[one_idx >= start]
+    cut = int(good_from_start[k_frames - 1])
+
+    # Convert back to absolute indices
+    abs_start = offset + start
+    abs_cut = offset + cut
+
+    result = np.zeros_like(mask)
+    result[abs_start:abs_cut + 1] = mask[abs_start:abs_cut + 1]
+
+    return result, minutes_to_sample, total_usable_minutes, grace_minutes
