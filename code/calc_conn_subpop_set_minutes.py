@@ -21,7 +21,7 @@ from functions.dconn_shrinker import dconn_to_hdf5
 datasetdir = 's3://subpop-v1.0/derivatives/xcpd0.12.0/output'
 
 # total minutes of data to keep per session
-total_minutes = 25
+total_minutes = 30 # number or None
 
 # Motion filter options
 fd_threshold = 0.2
@@ -60,8 +60,9 @@ wd = Path(os.path.dirname(wd))
 out = wd / 'data'
 
 ### Subjects, sessions and runs ###
-#sublist = wd / 'code' / 'sublist' / 'Subpop_v1_UMN_sub_ses_3plus_run_25min.csv'
-sublist = wd / 'code' / 'sublist' / 'Subpop_v1_WashU_sub_ses_3plus_run_25min.csv'
+#sublist = wd / 'code' / 'sublist' / 'Subpop_v1_UMN_sub_ses_4runs_only_25min_1st_half.csv'
+sublist = wd / 'code' / 'sublist' / 'Subpop_v1_UMN_sub_ses_3plus_run_25min.csv'
+#sublist = wd / 'code' / 'sublist' / 'Subpop_v1_WashU_sub_ses_3plus_run_25min.csv'
 sub_ses_run_map = build_subject_session_run_map(sublist)
 ses_combined = 'ses-combined'  # in order to find the file it will have to be: 'combined' but would be better to rename this to ses-1 ...
 
@@ -103,24 +104,6 @@ for s_i, ses_dict in sub_ses_run_map.items():
         n_runs = len(runs)
         print(f'\nGoing to keep {total_minutes} minutes across all runs')
         print(f'\nFound {n_runs} runs for this session')
-        # if sub_i == '1007501' and runs == ['run-07', 'run-08', 'run-09'] and total_minutes >= 25:
-        #     # Special case for sub-1007501, ses-3, which has only 5.2 minutes of data in run-09
-        #     shorter_run_minutes = 5.78
-        #     leftover_minutes = total_minutes - shorter_run_minutes
-        #     longer_run_minutes = leftover_minutes * (16/32)
-        #     print(f'Splitting into: {longer_run_minutes} for run 1, {longer_run_minutes} for run 2, and {shorter_run_minutes} for run 3')
-        #     print(f'Which is: {longer_run_minutes * 2 + shorter_run_minutes} minutes in total')
-        # elif n_runs == 3:
-        #     longer_run_minutes = total_minutes * (16/42)  # longer runs are 16 minutes long
-        #     shorter_run_minutes = total_minutes * (10/42) # shorter run is 10 minutes long
-        #     print(f'Splitting into: {longer_run_minutes} for run 1, {longer_run_minutes} for run 2, and {shorter_run_minutes} for run 3')
-        #     print(f'Which is: {longer_run_minutes * 2 + shorter_run_minutes} minutes in total')
-        # elif n_runs == 2:
-        #     longer_run_minutes = total_minutes * (16/32)
-        #     print(f'Splitting into: {longer_run_minutes} for run 1, and {longer_run_minutes} for run 2')
-        #     print(f'Which is: {longer_run_minutes * 2} minutes in total')
-        # else:
-        #     raise ValueError(f"Unexpected number of runs: {n_runs}. Expected 2 or 3.")
 
         # Now get run data and motion files prepare for shortening and concatenation
         runs_info = []
@@ -204,44 +187,6 @@ for s_i, ses_dict in sub_ses_run_map.items():
                 print('\nCombining motion and outlier files and saving...')
                 combined = np.logical_and(inverted_motion, inverted_outlier).astype(int)
                 combined_file = outfile / 'func' / f'sub-{sub_i}_{new_ses}_task-{task}_{run_i}_desc-FD_{fd_str}_and_outliers_combined.txt'
-                
-                # minutes = sum(combined)*TR/60
-                # print(f'\nParticipant has {minutes} minutes of data in this run.')
-
-                # ##### Isnt the maximum number of frames written in the motion file????
-                # this_run_total_minutes = total_frames * TR / 60
-                # if this_run_total_minutes > 12: 
-                #     # longer runs are 16 minutes long so we can assume if the run has more than 12 minutes it is a longer run
-                #     x_min = longer_run_minutes
-                # else:
-                #     x_min = shorter_run_minutes
-                    
-                # print(f'\nShortening this run to {x_min} minutes of data...')
-                # max_frames = int(np.round(x_min*60/TR, 0)) # maximum frames for x_min minutes at TR = 1.761
-                # one_indices = np.flatnonzero(combined)
-                # if len(one_indices) >= max_frames:
-                #     cut_off_index = one_indices[max_frames-1]
-                #     print(f'\nCutting off at index {cut_off_index} to keep only the first ~ {x_min} minutes ({max_frames} frames).')
-                #     combined[cut_off_index + 1:] = 0
-                # elif len(one_indices) <= max_frames and n_runs == 2:
-                #     print(f'\n\n\n\nWARNING !!!!!!!!!!!!!')
-                #     print(f'Subject has only 2 runs and one does not have enough frames to cut off to {x_min} minutes.')
-                #     print(f'Found {len(one_indices)} frames, Taking all.\n\n\n\n')
-                # else:
-                #     print(f'\n\n\n\nWARNING !!!!!!!!!!!!!')
-                #     print(f'Not enough frames to cut off to {x_min} minutes. Found {len(one_indices)} frames, expected at least {max_frames}.\n\n\n\n')
-                #     print(f'Will take all frames instead.')
-                #     # raise ValueError(
-                #     #     f"Not enough frames to cut off to 10 minutes. Found {len(one_indices)} frames, expected at least {max_frames}."
-                #     # )
-
-                # minutes = sum(combined)*TR/60
-                # print(f'Participant now left with {minutes} minutes of data in this run.')
-
-                # print(f'\nSaving shortened motion file...\n')
-                # np.savetxt(combined_file, combined, fmt="%d")
-
-                # motion_file_run = combined_file # make sure to use the combined file if outliers were removed for the next steps
 
                 this_run_minutes = sum(combined)*TR/60
                 print(f'\nParticipant has {this_run_minutes} minutes of data in this run.')
@@ -256,24 +201,6 @@ for s_i, ses_dict in sub_ses_run_map.items():
         print('\n______________________DONE_WITH_INDIVIDUAL_RUNS______________________')
         #print('\nConcatenating motion files...')
         print(f'\nShortening this session to {total_minutes} minutes of data...')
-
-        # ending = motion_file_run.as_posix().split('-').pop()
-        # motion_files = glob.glob(f'{outfile}/func/*{ending}')
-        # motion_list = []
-        # # load all motion files
-        # for m_file_i in motion_files:
-        #     m_i = np.loadtxt(m_file_i, dtype=int)
-        #     motion_list.append(m_i)
-        # motion = np.concatenate(motion_list)
-        # # Check that shortening worked
-        # minutes = sum(motion)*TR/60
-        # # This is already INVERTED for wb_command: 0 = remove, 1 = keep
-        # print(f'\n\nAFTER CONCATENATION participant left with {minutes} minutes of data.')
-        # print(f'This amounts to {np.sum(motion).astype(int)} frames out of {len(motion)}') # Here summing inverted motion
-        # # Save
-        # motion_file = f'{outfile}/sub-{sub_i}_{new_ses}_task-{task}_desc-FD_{fd_str}.txt'
-        # print('\nSaving concatenated motion file...')
-        # np.savetxt(motion_file, motion, fmt="%d")
 
         # Check if TR differs across runs
         TR_ref = runs_info[0].TR
