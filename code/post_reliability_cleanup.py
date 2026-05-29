@@ -5,6 +5,7 @@ import os
 import glob
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 import nibabel as nb
 from nilearn import connectome
@@ -238,101 +239,98 @@ print(file2save)
 
 
 
-# # Export mean ICC map as cifti
-# if dataset.startswith('subpop_UMN'):
-#     # Load reference subject data
-#     print('\nUsing subpop reference subject data')
-#     #ptseries = nb.load(f'{indir}/sub-1002901/ses-2/sub-1002901_ses-2_task-restMENORDICtrimmed_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries.ptseries.nii')
-#     pscalar  = nb.load(f'{wd}/data/template_files/sub-1000201_ses-combined_task-restNORDIC_run-11_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
-# elif dataset.startswith('subpop_WashU'):
-#     # Load reference subject data
-#     print('\nUsing subpop WashU reference subject data')
-#     #ptseries = nb.load(f'{indir}/sub-1002901/ses-2/sub-1002901_ses-2_task-restMENORDICtrimmed_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries.ptseries.nii')
-#     pscalar  = nb.load(f'{wd}/data/template_files/sub-2003101_ses-combined_task-restNORDIC_run-07_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
-# elif dataset.startswith('MSC'):
-#     # Load reference subject data
-#     print('\nUsing MSC reference subject data')
-#     ptseries = nb.load(f'{indir}/sub-MSC04/ses-func07/func/sub-MSC04_ses-func07_task-rest__space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries.ptseries.nii')
-#     pscalar  = nb.load(f'{wd}/data/template_files/sub-MSC04_ses-func06_task-rest_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
-# # elif dataset == 'HCPtrt_cneuro':
-#     # Load reference subject data
-#     # print('\nUsing HCPtrt reference subject data')
-#     # pconn = nb.load(f'{indir}/sub-HCPtrt_cneuro/ses-1/sub-HCPtrt_cneuro_ses-1_task-rest_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
-#     # pconn_data = pconn.get_fdata()
-# elif dataset.startswith('adultcontrols'):
-#     # Load reference subject data
-#     print('\nUsing adult controls (ABSCAN + 3t7t) reference subject data')
-#     ptseries = nb.load(f'{indir}/sub-4810/ses-1/sub-4810_ses-1_task-restMENORDICrmnoisevols_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries.ptseries.nii')
-#     pscalar  = nb.load(f'{wd}/data/template_files/sub-4803_ses-combined_task-restMENORDICrmnoisevols_run-16_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
-# else:
-#     raise ValueError(f"Unknown dataset: {dataset}. NOT SAVING PLOTS.")
+# Export mean ICC map as cifti
+if dataset.startswith('subpop_UMN'):
+    # Load reference subject data
+    print('\nUsing subpop reference subject data')
+    pscalar  = nb.load(f'{wd}/data/template_files/sub-1000201_ses-combined_task-restNORDIC_run-11_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
+elif dataset.startswith('subpop_WashU'):
+    # Load reference subject data
+    print('\nUsing subpop WashU reference subject data')
+    pscalar  = nb.load(f'{wd}/data/template_files/sub-2003101_ses-combined_task-restNORDIC_run-07_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
+elif dataset.startswith('MSC'):
+    # Load reference subject data
+    print('\nUsing MSC reference subject data')
+    pscalar  = nb.load(f'{wd}/data/template_files/sub-MSC04_ses-func06_task-rest_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
+# elif dataset == 'HCPtrt_cneuro':
+    # Load reference subject data
+    # print('\nUsing HCPtrt reference subject data')
+    # pconn = nb.load(f'{indir}/sub-HCPtrt_cneuro/ses-1/sub-HCPtrt_cneuro_ses-1_task-rest_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    # pconn_data = pconn.get_fdata()
+elif dataset.startswith('adultcontrols'):
+    # Load reference subject data
+    print('\nUsing adult controls (ABSCAN) reference subject data')
+    file2get = glob.glob(f'{wd}/data/template_files/sub-4812**{feature}**coverage_boldmap.pscalar.nii')[0]
+    pscalar  = nb.load(file2get)
+else:
+    raise ValueError(f"Unknown dataset: {dataset}. NOT SAVING PLOTS.")
 
-# # Schaefer:
-# # pscalar  = nb.load('/home/btervocl/shared/projects/martin_SNR/input/subpop/sub-1007501_ses-combined_task-restMENORDICtrimmed_run-12_space-fsLR_seg-4S1056Parcels_den-91k_stat-coverage_boldmap.pscalar.nii')
-# # ptseries = nb.load('/home/btervocl/shared/projects/martin_SNR/input/subpop/sub-1007501/ses-2/sub-1007501_ses-2_task-restMENORDICtrimmed_space-fsLR_seg-4S1056Parcels_den-91k_stat-mean_timeseries.ptseries.nii')
+# Schaefer:
+# pscalar  = nb.load('/home/btervocl/shared/projects/martin_SNR/input/subpop/sub-1007501_ses-combined_task-restMENORDICtrimmed_run-12_space-fsLR_seg-4S1056Parcels_den-91k_stat-coverage_boldmap.pscalar.nii')
+# ptseries = nb.load('/home/btervocl/shared/projects/martin_SNR/input/subpop/sub-1007501/ses-2/sub-1007501_ses-2_task-restMENORDICtrimmed_space-fsLR_seg-4S1056Parcels_den-91k_stat-mean_timeseries.ptseries.nii')
 
-# # Glasser:
-# # ptseries = nb.load('/home/btervocl/shared/projects/martin_FC_stability/data/subpop/sub-1002901/ses-2/sub-1002901_ses-2_task-restMENORDICtrimmed_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries.ptseries.nii')
-# # pscalar  = nb.load('/home/btervocl/shared/projects/martin_FC_stability/data/template_maps/sub-1002901_ses-combined_task-restMENORDICtrimmed_run-10_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
+# Glasser:
+# ptseries = nb.load('/home/btervocl/shared/projects/martin_FC_stability/data/subpop/sub-1002901/ses-2/sub-1002901_ses-2_task-restMENORDICtrimmed_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries.ptseries.nii')
+# pscalar  = nb.load('/home/btervocl/shared/projects/martin_FC_stability/data/template_maps/sub-1002901_ses-combined_task-restMENORDICtrimmed_run-10_space-fsLR_seg-Glasser_den-91k_stat-coverage_boldmap.pscalar.nii')
 
 
-# psclr = pscalar.get_fdata()
-# print(psclr.shape)
+psclr = pscalar.get_fdata()
+print(psclr.shape)
 
-# #dt = ptseries.get_fdata()
-# #print(dt.shape)
+#dt = ptseries.get_fdata()
+#print(dt.shape)
 
-# # ICC
-# icc_mat = connectome.vec_to_sym_matrix(df['icc'],diagonal=np.repeat(np.nan,psclr.shape[1]))
-# # #save the ICC matrix
-# # icc_save = pd.DataFrame(icc_mat)
-# # icc_save.to_csv(f'/home/btervocl/shared/projects/martin_FC_stability/res/subpop/icc_matrix_{feature}.csv')
+# ICC
+icc_mat = connectome.vec_to_sym_matrix(df['icc'],diagonal=np.repeat(np.nan,psclr.shape[1]))
+# #save the ICC matrix
+# icc_save = pd.DataFrame(icc_mat)
+# icc_save.to_csv(f'/home/btervocl/shared/projects/martin_FC_stability/res/subpop/icc_matrix_{feature}.csv')
 
-# median_icc = np.nanmedian(icc_mat, axis=0)
-# # zero_indices = np.where(median_icc == 0)[0]
-# # median_icc[299] = np.mean(np.append(median_icc[298],median_icc[300]))
-# # zero_indices = np.where(median_icc == 0)[0]
-# # median_icc[zero_indices] = 0.42
+median_icc = np.nanmedian(icc_mat, axis=0)
+# zero_indices = np.where(median_icc == 0)[0]
+# median_icc[299] = np.mean(np.append(median_icc[298],median_icc[300]))
+# zero_indices = np.where(median_icc == 0)[0]
+# median_icc[zero_indices] = 0.42
 
-# new_img = nb.Cifti2Image(median_icc.reshape(1, 360), header=pscalar.header,
+new_img = nb.Cifti2Image(median_icc.reshape(1, psclr.shape[1]), header=pscalar.header,
+                         nifti_header=pscalar.nifti_header)
+
+new_img.to_filename(f'{outdir}/plots/img/icc_median_{dataset}_{feature}.pscalar.nii')
+
+# mean_icc_mat = np.nanmean(icc_mat, axis=0)
+# zero_indices = np.where(mean_icc_mat == 0)[0]
+# mean_icc_mat[299] = np.mean(np.append(mean_icc_mat[298],mean_icc_mat[300]))
+# zero_indices = np.where(mean_icc_mat == 0)[0]
+# mean_icc_mat[zero_indices] = 0.42
+
+# cov_icc = np.nanstd(icc_mat, axis=0) / mean_icc_mat
+# zero_indices = np.where(cov_icc == 0)[0]
+# cov_icc[299] = np.mean(np.append(cov_icc[298],cov_icc[300]))
+# zero_indices = np.where(cov_icc == 0)[0]
+
+# new_img = nb.Cifti2Image(cov_icc.reshape(1, psclr.shape[1]), header=pscalar.header,
 #                          nifti_header=pscalar.nifti_header)
 
-# new_img.to_filename(f'{outdir}/plots/img/icc_median_{dataset}_{feature}.pscalar.nii')
+# new_img.to_filename(f'/home/btervocl/shared/projects/martin_FC_stability/res/subpop/img/subpop_cov_icc_{feature}.pscalar.nii')
 
-# # mean_icc_mat = np.nanmean(icc_mat, axis=0)
-# # zero_indices = np.where(mean_icc_mat == 0)[0]
-# # mean_icc_mat[299] = np.mean(np.append(mean_icc_mat[298],mean_icc_mat[300]))
-# # zero_indices = np.where(mean_icc_mat == 0)[0]
-# # mean_icc_mat[zero_indices] = 0.42
+# Within
+mat = connectome.vec_to_sym_matrix(df['within_sub_var'],diagonal=np.repeat(np.nan,psclr.shape[1]))
+median_icc = np.nanmedian(mat, axis=0)
 
-# # cov_icc = np.nanstd(icc_mat, axis=0) / mean_icc_mat
-# # zero_indices = np.where(cov_icc == 0)[0]
-# # cov_icc[299] = np.mean(np.append(cov_icc[298],cov_icc[300]))
-# # zero_indices = np.where(cov_icc == 0)[0]
+new_img = nb.Cifti2Image(median_icc.reshape(1, psclr.shape[1]), header=pscalar.header,
+                         nifti_header=pscalar.nifti_header)
 
-# # new_img = nb.Cifti2Image(cov_icc.reshape(1, 360), header=pscalar.header,
-# #                          nifti_header=pscalar.nifti_header)
-
-# # new_img.to_filename(f'/home/btervocl/shared/projects/martin_FC_stability/res/subpop/img/subpop_cov_icc_{feature}.pscalar.nii')
-
-# # Within
-# mat = connectome.vec_to_sym_matrix(df['within_sub_var'],diagonal=np.repeat(np.nan,psclr.shape[1]))
-# median_icc = np.nanmedian(mat, axis=0)
-
-# new_img = nb.Cifti2Image(median_icc.reshape(1, 360), header=pscalar.header,
-#                          nifti_header=pscalar.nifti_header)
-
-# new_img.to_filename(f'{outdir}/plots/img/WH_median_{dataset}_{feature}.pscalar.nii')
+new_img.to_filename(f'{outdir}/plots/img/WH_median_{dataset}_{feature}.pscalar.nii')
 
 
-# # Between
-# mat = connectome.vec_to_sym_matrix(df['between_sub_var'],diagonal=np.repeat(np.nan,psclr.shape[1]))
-# median_icc = np.nanmedian(mat, axis=0)
+# Between
+mat = connectome.vec_to_sym_matrix(df['between_sub_var'],diagonal=np.repeat(np.nan,psclr.shape[1]))
+median_icc = np.nanmedian(mat, axis=0)
 
-# new_img = nb.Cifti2Image(median_icc.reshape(1, 360), header=pscalar.header,
-#                          nifti_header=pscalar.nifti_header)
+new_img = nb.Cifti2Image(median_icc.reshape(1, psclr.shape[1]), header=pscalar.header,
+                         nifti_header=pscalar.nifti_header)
 
-# new_img.to_filename(f'{outdir}/plots/img/BW_median_{dataset}_{feature}.pscalar.nii')
+new_img.to_filename(f'{outdir}/plots/img/BW_median_{dataset}_{feature}.pscalar.nii')
 
 
 
@@ -343,63 +341,50 @@ print(file2save)
 # half between / half within-subject variance matrices #
 ########################################################
 
-# # Between-subject variance
-# between_mat = connectome.vec_to_sym_matrix(df['between_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
-# np.fill_diagonal(between_mat, 0)
+# Between-subject variance
+between_mat = connectome.vec_to_sym_matrix(df['between_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
+np.fill_diagonal(between_mat, 0)
 
-# between_mat = between_mat[indsort,indsort.T]
+between_mat = between_mat[indsort,indsort.T]
+between_mat = between_mat[~template_nan_rows, :][:, ~template_nan_rows]
 
-# #rows_to_remove # same as above --=> [290,291,329]
-# rows_to_remove = [290,291,329]
-# between_mat = np.delete(between_mat, rows_to_remove, axis=0)
-# between_mat = np.delete(between_mat, rows_to_remove, axis=1)
+# Within-subject variance
+within_mat = connectome.vec_to_sym_matrix(df['within_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
+np.fill_diagonal(within_mat, 0)
 
-# # Within-subject variance
-# within_mat = connectome.vec_to_sym_matrix(df['within_sub_var'],diagonal=np.repeat(np.nan,len(dat)))
-# np.fill_diagonal(within_mat, 0)
+within_mat = within_mat[indsort,indsort.T]
+within_mat = within_mat[~template_nan_rows, :][:, ~template_nan_rows]
 
-# within_mat = within_mat[indsort,indsort.T]
+# for within_mat max and min values
+cutoff = np.round(np.mean(df['within_sub_var']) + np.std(df['within_sub_var']) + np.std(df['within_sub_var']),3)
 
-# #rows_to_remove # same as above --=> [290,291,329]
-# within_mat = np.delete(within_mat, rows_to_remove, axis=0)
-# within_mat = np.delete(within_mat, rows_to_remove, axis=1)
+# Masks
+mask_upper = np.triu(np.ones_like(between_mat, dtype=bool), k=1)
+mask_lower = np.tril(np.ones_like(within_mat, dtype=bool), k=-1)
 
-# import numpy as np
-# import matplotlib.pyplot as plt
-# import matplotlib.colors as mcolors
-# import matplotlib
+# Masked arrays
+upper = np.ma.masked_where(~mask_upper, between_mat)
+lower = np.ma.masked_where(~mask_lower, within_mat)
 
-# # Example symmetric matrices
-# matrix_A = between_mat
-# matrix_B = within_mat
+# Plotting
+fig, ax = plt.subplots(figsize=(6, 6))
+plt.rcParams.update({'font.size': 15})
 
-# # Masks
-# mask_upper = np.triu(np.ones_like(matrix_A, dtype=bool), k=1)
-# mask_lower = np.tril(np.ones_like(matrix_B, dtype=bool), k=-1)
+# First colormap for upper triangle
+cmap_A = plt.cm.YlGnBu
+im_upper = ax.imshow(upper, origin = 'lower', cmap=cmap_A, vmin=0, vmax=0.05)
 
-# # Masked arrays
-# upper = np.ma.masked_where(~mask_upper, matrix_A)
-# lower = np.ma.masked_where(~mask_lower, matrix_B)
+# Second colormap for lower triangle
+cmap_B = plt.cm.YlGnBu
+im_lower = ax.imshow(lower, origin = 'lower', cmap=cmap_B, vmin=0, vmax=cutoff)
 
-# # Plotting
-# fig, ax = plt.subplots(figsize=(6, 6))
-# plt.rcParams.update({'font.size': 15})
+ax.tick_params(labelsize=15)
 
-# # First colormap for upper triangle
-# cmap_A = plt.cm.YlGnBu
-# im_upper = ax.imshow(upper, origin = 'lower', cmap=cmap_A, vmin=0, vmax=0.05)
+plt.tight_layout()
+plt.show()
 
-# # Second colormap for lower triangle
-# cmap_B = plt.cm.YlGnBu
-# im_lower = ax.imshow(lower, origin = 'lower', cmap=cmap_B, vmin=0, vmax=0.01)
-
-# ax.tick_params(labelsize=15)
-
-# plt.tight_layout()
-# plt.show()
-
-# file2save = Path(outdir) / 'plots' / f"combined_mat_subpop_{feature}.png"
-# print(f'saving: {file2save}')
-# plt.savefig(f'{file2save}', dpi=300)
-# plt.close()
+file2save = Path(outdir) / 'plots' / f"combined_between_within_mat_{feature}.png"
+print(f'saving: {file2save}')
+plt.savefig(f'{file2save}', dpi=300)
+plt.close()
 
