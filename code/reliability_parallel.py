@@ -16,13 +16,53 @@ from nilearn import connectome
 from joblib import Parallel, delayed
 from statsmodels.regression.mixed_linear_model import MixedLM
 
-
-#warnings.filterwarnings("ignore", category=DeprecationWarning)
-#warnings.filterwarnings("ignore", category=FutureWarning)
+# suppress warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
     os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
 
+
+### Functions ###
+# function for edgewise ICC
+def compute_icc_safe(data, col):
+    try:
+        # fit the mixed-effects model
+        model = MixedLM.from_formula(f'{str(col)} ~ 1', groups='subject_id', data=data)
+        rslt = model.fit(method=["bfgs"])
+
+        # extract variances and calc icc
+        between_sub_var = rslt.cov_re.iloc[0, 0]
+        within_sub_var = rslt.scale
+        icc = between_sub_var / (between_sub_var + within_sub_var)
+
+        return {
+            'column': col,
+            'between_sub_var': between_sub_var,
+            'within_sub_var': within_sub_var,
+            'icc': icc,
+            'error': None
+        }
+
+    except Exception as e:
+        return {
+            'column': col,
+            'between_sub_var': 0,
+            'within_sub_var': 0,
+            'icc': 0,
+            'error': str(e)
+        }
+
+# Batch computation for parallel processing 
+def compute_icc_batch(df, columns):
+    results = []
+    for col in columns:
+        subset_df = df[['subject_id', 'session_id', col]]
+        results.append(compute_icc_safe(subset_df, col))
+    return results
+
+
+
+############ INPUT PARAMS ############
 n_batches = 80 # Number of parallel jobs to run
 
 # Which feature and dataset (folder) to use
@@ -129,43 +169,8 @@ save_dir = wd / 'data' / f'{feature}_nan_rows' / f"{dataset}_nan_rows_template.t
 np.savetxt(save_dir, nan_rows_template, fmt='%d')
 
 
-# function for edgewise ICC
-def compute_icc_safe(data, col):
-    try:
-        # fit the mixed-effects model
-        model = MixedLM.from_formula(f'{str(col)} ~ 1', groups='subject_id', data=data)
-        rslt = model.fit(method=["bfgs"])
 
-        # extract variances and calc icc
-        between_sub_var = rslt.cov_re.iloc[0, 0]
-        within_sub_var = rslt.scale
-        icc = between_sub_var / (between_sub_var + within_sub_var)
-
-        return {
-            'column': col,
-            'between_sub_var': between_sub_var,
-            'within_sub_var': within_sub_var,
-            'icc': icc,
-            'error': None
-        }
-
-    except Exception as e:
-        return {
-            'column': col,
-            'between_sub_var': 0,
-            'within_sub_var': 0,
-            'icc': 0,
-            'error': str(e)
-        }
-
-# Batch computation for parallel processing 
-def compute_icc_batch(df, columns):
-    results = []
-    for col in columns:
-        subset_df = df[['subject_id', 'session_id', col]]
-        results.append(compute_icc_safe(subset_df, col))
-    return results
-
+### Computation time ###
 # Create batches of columns
 column_batches = np.array_split(
     [col for col in df.columns if col not in ['subject_id', 'session_id']], n_batches
