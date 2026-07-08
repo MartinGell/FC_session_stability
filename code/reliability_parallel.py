@@ -27,7 +27,7 @@ n_batches = 80 # Number of parallel jobs to run
 
 # Which feature and dataset (folder) to use
 feature = 'Gordon' # '4S1056Parcels' 'Glasser'
-dataset = 'subpop_WashU25' # 'subpop', 'MSC', HCPtrt_cneuro, MSC_4runs subpop_UMN25 adultcontrols25
+dataset = 'subpop_UMN25' # 'subpop_WashU25', 'MSC25', HCPtrt_cneuro, MSC_4runs subpop_UMN25 adultcontrols25
 ####################################### 
 
 
@@ -39,6 +39,7 @@ indir = wd / 'data' / dataset
 outdir = wd / 'res' / dataset
 outdir.mkdir(parents=True, exist_ok=True)
 
+# Atlases
 if feature == 'Glasser':
     # Load Glasser sorting index
     indsort = np.loadtxt(f'{wd}/data/cortex_subcortex_community_order.txt',dtype=int) -1
@@ -60,6 +61,7 @@ file_paths = glob.glob(f"{indir}/sub-*/ses-*/*{feature}*.pconn.nii")
 
 # initialise
 data = []
+all_nan_rows = []
 
 for file_i in sorted(file_paths):
 
@@ -74,15 +76,19 @@ for file_i in sorted(file_paths):
     nii = nb.load(file_i)
     dat = nii.get_fdata()
 
-    dat = dat.astype(np.float16)
+    #dat = dat.astype(np.float16)
+    dat = np.clip(dat, -0.999999, 0.999999) # shouldnt be necessary, avoids nans
+    dat_z = np.arctanh(dat)  # Fisher z-transform
 
-    # sort and plot FC matrix
+    # sort and plot actual FC matrix, not the z-scored values
     sorted_mat = dat[indsort,indsort.T]
 
     # remove rows/columns that are entirely NaN (excluding diagonal)
     mat_no_diag = sorted_mat.copy()
     np.fill_diagonal(mat_no_diag, np.nan)
     nan_rows = np.all(np.isnan(mat_no_diag), axis=1)
+    all_nan_rows.append([sub_id, *nan_rows])
+
     sorted_mat = sorted_mat[~nan_rows, :][:, ~nan_rows]
 
     cmap_custom = plt.cm.RdBu_r
@@ -98,8 +104,8 @@ for file_i in sorted(file_paths):
     plt.close()
 
     # save upper triangle
-    print(dat.shape)
-    upper = connectome.sym_matrix_to_vec(dat, discard_diagonal = True)
+    print(dat_z.shape)
+    upper = connectome.sym_matrix_to_vec(dat_z, discard_diagonal = True)
     
     # save
     data.append([sub_id, ses_id, *upper])
@@ -107,26 +113,23 @@ for file_i in sorted(file_paths):
 cols = ['subject_id', 'session_id'] + [f"conn_{i}" for i in range(len(data[0]) - 2)]
 df = pd.DataFrame(data, columns=cols)
 
+# Get the columns that are all NaN across subjects and save this information for later use in plotting
+nan_cols = ["subject_id"] + [f"{i}" for i in atlas['full_name'].values[indsort.flatten()].flatten()]
+all_nan_rows = pd.DataFrame(all_nan_rows, columns=nan_cols)
+# save
+save_dir = wd / 'data' / f'{feature}_nan_rows' / f"{dataset}_nan_rows_all_subs.csv"
+save_dir.parent.mkdir(parents=True, exist_ok=True)
+all_nan_rows.to_csv(save_dir, index=False)
 
-# # Reliability
-# def compute_icc(col):
-#     data = df[['subject_id', 'session_id', col]]
+# This is the final variable where at least one subject has a NaN value for that row/column
+nan_rows_template = np.any(all_nan_rows, axis=0)
+nan_rows_template = nan_rows_template[1:len(nan_rows_template)].values # skip the subject_id column
+# save this as text
+save_dir = wd / 'data' / f'{feature}_nan_rows' / f"{dataset}_nan_rows_template.txt"
+np.savetxt(save_dir, nan_rows_template, fmt='%d')
 
-#     model = MixedLM.from_formula(f'{str(col)} ~ 1', groups='subject_id', data=data)
-#     rslt = model.fit(method=["bfgs"])
 
-#     between_sub_var = rslt.cov_re.iloc[0, 0].astype(np.float16)
-#     within_sub_var = rslt.scale.astype(np.float16)
-
-#     icc = between_sub_var / (between_sub_var + within_sub_var)
-    
-#     return [between_sub_var, within_sub_var, icc]
-
-# # Calculate
-# Res = Parallel(n_jobs=-15)(delayed(compute_icc)(col_i) for col_i in df.columns if col_i not in ['subject_id', 'session_id'])
-# cols = ['between_sub_var', 'within_sub_var', 'icc']
-# results = pd.DataFrame(Res, columns=cols)
-
+# function for edgewise ICC
 def compute_icc_safe(data, col):
     try:
         # fit the mixed-effects model
@@ -134,8 +137,8 @@ def compute_icc_safe(data, col):
         rslt = model.fit(method=["bfgs"])
 
         # extract variances and calc icc
-        between_sub_var = rslt.cov_re.iloc[0, 0].astype(np.float16)
-        within_sub_var = rslt.scale.astype(np.float16)
+        between_sub_var = rslt.cov_re.iloc[0, 0]
+        within_sub_var = rslt.scale
         icc = between_sub_var / (between_sub_var + within_sub_var)
 
         return {
@@ -168,6 +171,7 @@ column_batches = np.array_split(
     [col for col in df.columns if col not in ['subject_id', 'session_id']], n_batches
 )
 
+# Parallel computation
 Res = Parallel(n_jobs=n_batches)(
     delayed(compute_icc_batch)(df, batch) for batch in column_batches
 )
@@ -181,14 +185,6 @@ if not results_df['column'].equals(pd.Series(original_order)):
     results_df['column'] = pd.Categorical(results_df['column'], categories=original_order, ordered=True)
     results_df = results_df.sort_values('column').reset_index(drop=True)
 
-# Parallel computation
-# Res = Parallel(n_jobs=-15)(
-#     delayed(compute_icc_safe)(df[['subject_id', 'session_id', col]], col) for col in df.columns if col not in ['subject_id', 'session_id']
-# )
-
-# # Convert results to a DataFrame
-# results_df = pd.DataFrame(Res)
-
 # Save results and errors separately
 results = results_df[['column', 'between_sub_var', 'within_sub_var', 'icc']]
 error_log = results_df[results_df['error'].notnull()]
@@ -198,7 +194,7 @@ error_log[['column', 'error']].to_csv(error_dir, index=False)
 
 print(results.describe())
 
-# save - possibly switch to datatable
+# save
 file2save = f'{outdir}/{dataset}_icc_variances_{feature}.csv'
 print(f'saving: {file2save}')
 results.to_csv(file2save, index=False)
@@ -217,17 +213,26 @@ print(f'saving: {f'{outdir}/{dataset}_results_histograms_{feature}.png'}')
 if dataset.startswith('subpop_UMN'):
     # Load reference subject data
     print('\nUsing subpop reference subject data')
-    pconn = nb.load(f'{indir}/sub-1000201/ses-1/sub-1000201_ses-1_task-restNORDIC_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    if feature == 'Gordon':
+        pconn = nb.load(f'{indir}/sub-1000201/ses-1/sub-1000201_ses-1_task-restNORDIC_space-fsLR_seg-Gordon_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    else:
+        pconn = nb.load(f'{indir}/sub-1000201/ses-1/sub-1000201_ses-1_task-restNORDIC_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
     pconn_data = pconn.get_fdata()
 elif dataset.startswith('subpop_WashU'):
     # Load reference subject data
     print('\nUsing subpop WashU reference subject data')
-    pconn = nb.load(f'{indir}/sub-2003101/ses-3/sub-2003101_ses-3_task-restNORDIC_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    if feature == 'Gordon':
+        pconn = nb.load(f'{indir}/sub-2003101/ses-3/sub-2003101_ses-3_task-restNORDIC_space-fsLR_seg-Gordon_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    else:
+        pconn = nb.load(f'{indir}/sub-2003101/ses-3/sub-2003101_ses-3_task-restNORDIC_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
     pconn_data = pconn.get_fdata()
 elif dataset.startswith('MSC'):
     # Load reference subject data
     print('\nUsing MSC reference subject data')
-    pconn = nb.load(f'{indir}/sub-MSC04/ses-func07/sub-MSC04_ses-func07_task-rest_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    if feature == 'Gordon':
+        pconn = nb.load(f'{indir}/sub-MSC04/ses-func07/sub-MSC04_ses-func07_task-rest_space-fsLR_seg-Gordon_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    else:
+        pconn = nb.load(f'{indir}/sub-MSC04/ses-func07/sub-MSC04_ses-func07_task-rest_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
     pconn_data = pconn.get_fdata()
 elif dataset == 'HCPtrt_cneuro':
     # Load reference subject data
@@ -236,8 +241,11 @@ elif dataset == 'HCPtrt_cneuro':
     pconn_data = pconn.get_fdata()
 elif dataset.startswith('adultcontrols'):
     # Load reference subject data
-    print('\nUsing adult controls (ABSCAN + 3t7t) reference subject data')
-    pconn = nb.load(f'{indir}/sub-4808/ses-1/sub-4808_ses-1_task-restMENORDICrmnoisevols_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    print('\nUsing adult controls (ABSCAN) reference subject data')
+    if feature == 'Gordon':
+        pconn = nb.load(f'{indir}/sub-4808/ses-1/sub-4808_ses-1_task-restMENORDICrmnoisevols_space-fsLR_seg-Gordon_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
+    else:
+        pconn = nb.load(f'{indir}/sub-4808/ses-1/sub-4808_ses-1_task-restMENORDICrmnoisevols_space-fsLR_seg-Glasser_den-91k_stat-mean_timeseries_FD_02.pconn.nii')
     pconn_data = pconn.get_fdata()
 else:
     raise ValueError(f"Unknown dataset: {dataset}. NOT SAVING PLOTS.")
@@ -249,11 +257,19 @@ np.fill_diagonal(icc_mat, 0)
 
 # sort
 sorted_mat = icc_mat[indsort,indsort.T]
+sorted_mat = sorted_mat[~nan_rows_template, :][:, ~nan_rows_template] # saved from FC mats above
+
+# check this didnt produce any nans form negative values 
+print(f"Number of negative values in sorted_mat: {np.sum(sorted_mat < 0)}")
+#sorted_mat[sorted_mat < 0] = 0
+
+# plot as SD instead of raw variance
+sorted_mat = np.sqrt(sorted_mat)
 
 cmap_custom = plt.cm.YlGnBu
 
 plt.figure(figsize=(7, 7))
-plt.imshow(sorted_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.05)
+plt.imshow(sorted_mat, origin='lower', cmap=cmap_custom, vmin=0, vmax=0.3)
 cbar = plt.colorbar(fraction=0.046)
 plt.show()
 
@@ -283,10 +299,19 @@ np.fill_diagonal(icc_mat, 0)
 
 # sort
 sorted_mat = icc_mat[indsort,indsort.T]
+sorted_mat = sorted_mat[~nan_rows_template, :][:, ~nan_rows_template] # saved from FC mats above
+
+print(f"Number of negative values in sorted_mat: {np.sum(sorted_mat < 0)}")
+#sorted_mat[sorted_mat < 0] = 0
+
+# plot as SD instead of raw variance
+sorted_mat = np.sqrt(sorted_mat)
 
 cmap_custom = plt.cm.YlGnBu
 
-cutoff = np.round(np.mean(results['within_sub_var']) + np.std(results['within_sub_var']) + np.std(results['within_sub_var']),3)
+within_sub_sd = np.sqrt(results['within_sub_var']) # currently repeating the SD calc, update but be mindful of diagonal and rows set to 0
+cutoff = np.round(np.mean(within_sub_sd) + 2 * np.std(within_sub_sd), 3)
+#cutoff = np.round(np.mean(results['within_sub_var']) + np.std(results['within_sub_var']) + np.std(results['within_sub_var']),3)
 
 plt.figure(figsize=(7, 7))
 #plt.imshow(icc_mat, origin='lower', cmap=cmap_custom)
@@ -319,6 +344,7 @@ np.fill_diagonal(icc_mat, 0)
 
 # sort
 sorted_mat = icc_mat[indsort,indsort.T]
+sorted_mat = sorted_mat[~nan_rows_template, :][:, ~nan_rows_template] # saved from FC mats above
 
 cmap_custom = plt.cm.YlGnBu
 
